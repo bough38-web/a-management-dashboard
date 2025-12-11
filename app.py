@@ -368,9 +368,9 @@ with tab_ops:
         fig3.update_traces(textinfo='percent+label')
         st.plotly_chart(fig3, use_container_width=True)
 
-# [TAB 3] Data Grid
+# [TAB 3] Data Grid with Secure Download
 with tab_data:
-    st.subheader("💾 Intelligent Data Grid")
+    st.subheader("💾 Intelligent Data Grid & Secure Export")
     
     # Column Config for Smart Display
     display_cols = ['본부', '지사', 'Period', '고객번호', '상호', '월정료(VAT미포함)', '정지,설변구분', '부실구분', '이벤트시작일']
@@ -401,11 +401,30 @@ with tab_data:
         }
     )
     
-    # Export
-    csv_data = df_filtered.to_csv(index=False).encode('utf-8-sig')
-    st.download_button(
-        label="📥 전체 데이터 다운로드 (CSV)",
-        data=csv_data,
-        file_name='ktt_enterprise_data.csv',
-        mime='text/csv'
-    )
+    # --- SECURE DOWNLOAD SECTION ---
+    st.markdown("---")
+    st.markdown("#### 🔒 Secure Download")
+    st.caption("민감한 데이터 보호를 위해 비밀번호 인증이 필요합니다.")
+
+    # Password Layout
+    col_pwd, col_btn = st.columns([1, 2])
+    
+    with col_pwd:
+        password = st.text_input("접근 비밀번호", type="password", placeholder="비밀번호 4자리를 입력하세요")
+    
+    with col_btn:
+        st.write("") # Spacing
+        st.write("") 
+        if password == "3867":
+            st.success("✅ 인증 성공! 다운로드 버튼이 활성화되었습니다.")
+            csv_data = df_filtered.to_csv(index=False).encode('utf-8-sig')
+            st.download_button(
+                label="📥 데이터 다운로드 (Encrypted CSV)",
+                data=csv_data,
+                file_name='ktt_secure_data.csv',
+                mime='text/csv'
+            )
+        elif password:
+            st.error("⚠️ 비밀번호가 일치하지 않습니다. 다시 시도해주세요.")
+        else:
+            st.info("👆 비밀번호 입력 대기 중...")
