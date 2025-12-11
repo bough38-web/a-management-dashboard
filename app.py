@@ -28,7 +28,7 @@ st.markdown("""
         }
         
         /* 2. 고급스러운 버튼 스타일 (st.pills 타겟팅) */
-        /* 선택된 알약 버튼 색상 변경 (기본 붉은색 -> 고급 인디고) */
+        /* 선택된 알약 버튼 색상 변경 (기본 붉은색 -> 고급 인디고 그라데이션) */
         div[data-testid="stPills"] button[aria-selected="true"] {
             background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%) !important;
             color: white !important;
@@ -174,7 +174,7 @@ k4.metric("Risk Alert (정지)", f"{risk_cnt:,.0f} 건", f"Ratio: {risk_cnt/tot_
 st.markdown("<br>", unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 5. Visualizations (Fixed ValueError)
+# 5. Visualizations (Fixed Errors)
 # -----------------------------------------------------------------------------
 tab_overview, tab_analysis, tab_grid = st.tabs(["📊 Performance & Structure", "📈 Deep Dive Analysis", "💾 Smart Data Grid"])
 
@@ -206,14 +206,13 @@ with tab_overview:
         
     with row1_c2:
         st.subheader("🌐 조직 계층 구조")
-        # [수정완료] color_continuous_scale='Indigo' -> 'Purples'로 변경
         if not df_filtered.empty:
             fig_sun = px.sunburst(
                 df_filtered, 
                 path=['본부', '지사'], 
                 values='계약번호',
                 color='계약번호',
-                color_continuous_scale='Purples', # 올바른 색상 스케일
+                color_continuous_scale='Purples', # Indigo 대신 Purples 사용 (에러 방지)
                 hover_data=['월정료(VAT미포함)']
             )
             fig_sun.update_layout(height=450, margin=dict(t=10, l=10, r=10, b=10))
@@ -224,7 +223,8 @@ with tab_overview:
     if '년월_dt' in df_filtered.columns:
         trend_df = df_filtered.groupby('년월_dt').agg({'계약번호':'count', '월정료(VAT미포함)':'sum'}).reset_index()
         fig_trend = px.area(trend_df, x='년월_dt', y='계약번호', markers=True)
-        fig_trend.update_traces(line_color='#4f46e5', fill_color='rgba(79, 70, 229, 0.2)')
+        # [수정됨] fill_color -> fillcolor 로 수정
+        fig_trend.update_traces(line_color='#4f46e5', fillcolor='rgba(79, 70, 229, 0.2)')
         fig_trend.update_layout(template="plotly_white", height=300)
         st.plotly_chart(fig_trend, use_container_width=True)
 
