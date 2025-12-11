@@ -35,91 +35,68 @@ initial_sidebar_state="collapsed"
 # =============================================================================
 
 def inject_global_css() -> None:
-"""Pretendard 폰트 + 공통 UI 스타일 주입."""
-st.markdown(
-f""" <style>
-@import url('[https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css](https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css)');
+    """Pretendard 폰트 + 공통 UI 스타일 주입."""
+    st.markdown(
+        f"""
+        <style>
+            @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
 
-```
-        html, body, [class*="css"] {{
-            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-        }}
-        .stApp {{
-            background-color: {COLOR_BG};
-        }}
-        
-        /* 헤더 */
-        .header-title {{
-            font-size: 28px;
-            font-weight: 800;
-            color: #1e293b;
-            margin-bottom: 5px;
-        }}
-        .header-subtitle {{
-            font-size: 15px;
-            color: #64748b;
-            margin-bottom: 20px;
-        }}
+            html, body, [class*="css"] {{
+                font-family: 'Pretendard', sans-serif;
+            }}
+            .stApp {{
+                background-color: {COLOR_BG};
+            }}
 
-        /* 필터 박스 */
-        .filter-box {{
-            background-color: #ffffff;
-            padding: 26px 26px 22px 26px;
-            border-radius: 24px;
-            box-shadow: 0 1px 3px rgba(15,23,42,0.12);
-            border: 1px solid #e2e8f0;
-            margin-bottom: 24px;
-        }}
+            .header-title {{
+                font-size: 28px;
+                font-weight: 800;
+                color: #1e293b;
+                margin-bottom: 5px;
+            }}
+            .header-subtitle {{
+                font-size: 15px;
+                color: #64748b;
+                margin-bottom: 20px;
+            }}
 
-        /* st.pills 스타일 */
-        div[data-testid="stPills"] {{
-            gap: 8px;
-        }}
-        div[data-testid="stPills"] button[aria-selected="true"] {{
-            background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important;
-            color: #ffffff !important;
-            border: none;
-            box-shadow: 0 4px 6px rgba(79,70,229,0.45);
-            font-weight: 600;
-            padding: 6px 16px;
-            border-radius: 999px;
-        }}
-        div[data-testid="stPills"] button[aria-selected="false"] {{
-            background-color: #ffffff !important;
-            border: 1px solid #e2e8f0 !important;
-            color: #475569 !important;
-            font-weight: 500;
-            border-radius: 999px;
-        }}
-        div[data-testid="stPills"] button:hover {{
-            border-color: #4f46e5 !important;
-            color: #4f46e5 !important;
-            background-color: #eef2ff !important;
-        }}
+            .filter-box {{
+                background-color: #ffffff;
+                padding: 26px;
+                border-radius: 24px;
+                box-shadow: 0 1px 3px rgba(15,23,42,0.12);
+                border: 1px solid #e2e8f0;
+                margin-bottom: 24px;
+            }}
 
-        /* KPI 카드 */
-        div[data-testid="stMetric"] {{
-            background-color: #ffffff;
-            border: 1px solid #e2e8f0;
-            padding: 22px;
-            border-radius: 18px;
-            box-shadow: 0 4px 6px rgba(15,23,42,0.08);
-            transition: transform 0.15s ease-out, box-shadow 0.15s ease-out, border-color 0.15s;
-        }}
-        div[data-testid="stMetric"]:hover {{
-            transform: translateY(-3px);
-            box-shadow: 0 12px 20px rgba(15,23,42,0.12);
-            border-color: #818cf8;
-        }}
+            div[data-testid="stPills"] {{
+                gap: 8px;
+            }}
+            div[data-testid="stPills"] button[aria-selected="true"] {{
+                background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important;
+                color: white !important;
+                border-radius: 999px;
+                border: none;
+            }}
+            div[data-testid="stPills"] button[aria-selected="false"] {{
+                background-color: white !important;
+                border-radius: 999px;
+                border: 1px solid #e2e8f0 !important;
+            }}
 
-        /* 탭 헤더 살짝 여백 줄이기 */
-        button[data-baseweb="tab"] {{
-            font-weight: 600;
-        }}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+            div[data-testid="stMetric"] {{
+                background-color: white;
+                border: 1px solid #e2e8f0;
+                padding: 22px;
+                border-radius: 18px;
+                box-shadow: 0 4px 6px rgba(15,23,42,0.08);
+                transition: .15s;
+            }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 ```
 
 inject_global_css()
