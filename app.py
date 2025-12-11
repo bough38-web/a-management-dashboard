@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import re
 
 # -----------------------------------------------------------------------------
 # 1. Enterprise Config & Design System
@@ -25,14 +26,14 @@ st.markdown("""
             color: #1e293b;
         }
         .stApp {
-            background-color: #f1f5f9; /* Slate-100 Background */
+            background-color: #f8fafc; /* Slate-50 Background */
         }
         
         /* Header Design */
         .dashboard-header {
             padding: 20px 0;
-            border-bottom: 2px solid #e2e8f0;
-            margin-bottom: 30px;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 20px;
         }
         .main-title {
             font-size: 2.2rem;
@@ -67,9 +68,11 @@ st.markdown("""
         }
         div[data-testid="stMetric"]:hover {
             border-color: #6366f1; /* Indigo-500 */
-            transform: translateY(-2px);
+            transform: translateY(-3px);
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
         }
+        div[data-testid="stMetricLabel"] { font-size: 0.9rem; color: #64748b; font-weight: 600; }
+        div[data-testid="stMetricValue"] { font-size: 1.8rem; color: #0f172a; font-weight: 800; }
         
         /* Pills Button Customization */
         div[data-testid="stPills"] { gap: 8px; flex-wrap: wrap; }
@@ -79,23 +82,33 @@ st.markdown("""
             border: none;
             font-weight: 600;
             box-shadow: 0 4px 6px -1px rgba(67, 56, 202, 0.3);
-            padding: 8px 18px;
+            padding: 6px 16px;
         }
         div[data-testid="stPills"] button[aria-selected="false"] {
-            background-color: #f8fafc !important;
+            background-color: #f1f5f9 !important;
             border: 1px solid #cbd5e1 !important;
             color: #475569 !important;
             font-weight: 500;
         }
         
         /* Tab Navigation */
-        .stTabs [data-baseweb="tab-list"] { gap: 8px; margin-bottom: 20px; }
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 8px;
+            margin-bottom: 20px;
+        }
         .stTabs [data-baseweb="tab"] {
-            height: 48px; background-color: white; border-radius: 10px; padding: 0 24px;
-            font-weight: 600; border: 1px solid #e2e8f0; color: #64748b;
+            height: 44px;
+            background-color: white;
+            border-radius: 8px;
+            padding: 0 20px;
+            font-weight: 600;
+            border: 1px solid #e2e8f0;
+            color: #64748b;
         }
         .stTabs [aria-selected="true"] {
-            background-color: #3b82f6 !important; color: white !important; border: none;
+            background-color: #3b82f6 !important;
+            color: white !important;
+            border: none;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -112,23 +125,24 @@ def load_enterprise_data():
         st.error("🚨 시스템 에러: 데이터 파일(data.csv)을 찾을 수 없습니다.")
         return pd.DataFrame()
 
-    # [Logic 1] 날짜 그룹화 엔진
+    # [Logic 1] 날짜 그룹화 엔진 (2024 이전 통합 / 2025 월별 분리)
     if '이벤트시작일' in df.columns:
         df['이벤트시작일'] = pd.to_datetime(df['이벤트시작일'], errors='coerce')
         
         def categorize_period(dt):
             if pd.isnull(dt): return "기간 미상"
             if dt.year < 2025:
-                return "2024년 이전 (누적)"
+                return "2024년 이전"
             else:
-                return f"'{str(dt.year)[-2:]}.{dt.month}"
+                return f"'{str(dt.year)[-2:]}.{dt.month}" # 예: '25.1, '25.2
         
         df['Period'] = df['이벤트시작일'].apply(categorize_period)
         
+        # 차트 정렬을 위한 Sort Key 생성
         def get_sort_key(dt):
             if pd.isnull(dt): return pd.Timestamp.min
             if dt.year < 2025:
-                return pd.Timestamp("2024-12-31")
+                return pd.Timestamp("2024-12-31") # 2025년 직전으로 정렬
             return dt
         df['SortKey'] = df['이벤트시작일'].apply(get_sort_key)
     
@@ -139,7 +153,6 @@ def load_enterprise_data():
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
     
     # [Logic 3] 범주형 결측치 처리
-    # KPI차감, 체납, 부실구분 등 새로 요청하신 컬럼 포함
     fill_cols = ['본부', '지사', '출동/영상', 'L형/i형', '정지,설변구분', '서비스(소)', '부실구분', 'KPI차감 10월말', '체납', '당월말_정지일수_구간', '월정료 구간']
     for col in fill_cols:
         if col not in df.columns:
@@ -156,13 +169,15 @@ if df.empty:
 # -----------------------------------------------------------------------------
 # 3. Dynamic Control Center (Smart Filtering)
 # -----------------------------------------------------------------------------
+# Header
 c_head1, c_head2 = st.columns([3, 1])
 with c_head1:
     st.markdown('<div class="main-title">KTT Enterprise Analytics</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-title">Strategic Insights & Operational Dashboard</div>', unsafe_allow_html=True)
 with c_head2:
-    st.markdown(f"<div style='text-align:right; color:#64748b; padding-top:20px;'>Last Update: {pd.Timestamp.now().strftime('%Y-%m-%d')}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align:right; color:#64748b; padding-top:20px;'>Data Date: {pd.Timestamp.now().strftime('%Y-%m-%d')}</div>", unsafe_allow_html=True)
 
+# Filters
 with st.container():
     st.markdown('<div class="card-container">', unsafe_allow_html=True)
     
@@ -184,6 +199,7 @@ with st.container():
     valid_branches = sorted(df[df['본부'].isin(selected_hq)]['지사'].unique().tolist())
     st.markdown(f"##### 📍 지사 선택 (Branches) — <span style='color:#6366f1'>{len(valid_branches)}개 지사 활성화</span>", unsafe_allow_html=True)
     
+    # UI 최적화를 위해 지사가 많으면 접기
     if len(valid_branches) > 30:
         with st.expander(f"🔽 전체 지사 목록 펼치기 ({len(valid_branches)}개)", expanded=False):
             try:
@@ -198,18 +214,18 @@ with st.container():
             
     if not selected_branch: selected_branch = valid_branches
     
-    # [3] 추가 조건 필터 (통합 요청 사항)
+    # [3] 추가 조건 필터 (KPI, 체납)
     st.markdown("---")
     c_filt1, c_filt2, c_filt3 = st.columns(3)
     
-    # KPI 대상 필터
     with c_filt1:
-        st.markdown("##### 🎯 KPI 차감 대상")
+        # KPI 차감 대상 필터
+        st.markdown("**🎯 KPI 관리**")
         kpi_target = st.toggle("KPI 차감 '대상' 건만 보기", value=False)
         
-    # 체납 필터
     with c_filt2:
-        st.markdown("##### 💰 체납 여부")
+        # 체납 필터
+        st.markdown("**💰 리스크 관리**")
         arrears_only = st.toggle("체납 보유 건만 보기", value=False)
         
     st.markdown('</div>', unsafe_allow_html=True)
@@ -221,6 +237,7 @@ if kpi_target:
     mask = mask & (df['KPI차감 10월말'].str.contains('대상', na=False))
 
 if arrears_only:
+    # 체납이 '-'나 'Unclassified'가 아닌 경우
     mask = mask & (df['체납'] != '-') & (df['체납'] != 'Unclassified')
 
 df_filtered = df[mask]
@@ -228,7 +245,7 @@ df_filtered = df[mask]
 # -----------------------------------------------------------------------------
 # 4. Executive Summary (KPIs)
 # -----------------------------------------------------------------------------
-st.markdown("### 🚀 Key Performance Indicators")
+st.markdown("### 🚀 Executive Summary")
 col_k1, col_k2, col_k3, col_k4 = st.columns(4)
 
 total_vol = len(df_filtered)
@@ -239,7 +256,7 @@ risk_cases = len(df_filtered[df_filtered['정지,설변구분'].str.contains('�
 def fmt_money(val):
     return f"₩{val/10000:,.0f} 만"
 
-col_k1.metric("총 계약 건수", f"{total_vol:,.0f} 건", "Filtered Volume")
+col_k1.metric("총 계약 건수", f"{total_vol:,.0f} 건", "Active Portfolio")
 col_k2.metric("총 월정료 (예상)", fmt_money(total_rev), "Monthly Revenue")
 col_k3.metric("평균 정지일수", f"{avg_susp_days:.1f} 일", "Avg Suspension Duration")
 col_k4.metric("Risk Alert (정지)", f"{risk_cases:,.0f} 건", f"Risk Rate: {risk_cases/total_vol*100:.1f}%" if total_vol>0 else "0%", delta_color="inverse")
@@ -247,19 +264,20 @@ col_k4.metric("Risk Alert (정지)", f"{risk_cases:,.0f} 건", f"Risk Rate: {ris
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 5. Enterprise Analytics (All Visuals Integrated)
+# 5. Enterprise Analytics (Visualizations)
 # -----------------------------------------------------------------------------
 tab_strategy, tab_ops, tab_data = st.tabs(["📊 전략 분석 (Strategy)", "🔍 운영 분석 (Operations)", "💾 데이터 그리드 (Data)"])
 
-# [TAB 1] Strategy View (Trend, Sunburst, Pareto)
+# [TAB 1] Strategy View (Growth, Portfolio, Efficiency)
 with tab_strategy:
     r1_c1, r1_c2 = st.columns([2, 1])
     
     with r1_c1:
         st.subheader("📅 기간별 실적 성장 추이")
         if 'Period' in df_filtered.columns:
+            # SortKey 기준으로 정렬하여 시간 순서 보장
             trend_df = df_filtered.groupby(['Period', 'SortKey']).agg({'계약번호':'count'}).reset_index().sort_values('SortKey')
-            fig_trend = px.area(trend_df, x='Period', y='계약번호', markers=True, title="계약 건수 변화 (2024이전 통합 vs 월별)")
+            fig_trend = px.area(trend_df, x='Period', y='계약번호', markers=True, title="계약 건수 변화 Trend")
             fig_trend.update_traces(line_color='#4f46e5', fillcolor='rgba(79, 70, 229, 0.1)')
             fig_trend.update_layout(template="plotly_white", height=380, xaxis_title=None, yaxis_title="계약 건수")
             st.plotly_chart(fig_trend, use_container_width=True)
@@ -276,7 +294,7 @@ with tab_strategy:
             fig_sun.update_layout(height=380, margin=dict(t=10, l=10, r=10, b=10))
             st.plotly_chart(fig_sun, use_container_width=True)
             
-    st.subheader("🏢 본부별 효율성 분석 (Pareto)")
+    st.subheader("🏢 본부별 효율성 분석 (Pareto Efficiency)")
     hq_stats = df_filtered.groupby('본부').agg({'계약번호':'count', '월정료(VAT미포함)':'sum'}).reset_index().sort_values('계약번호', ascending=False)
     
     fig_dual = make_subplots(specs=[[{"secondary_y": True}]])
@@ -285,7 +303,7 @@ with tab_strategy:
     fig_dual.update_layout(template="plotly_white", height=450, hovermode="x unified", legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center"))
     st.plotly_chart(fig_dual, use_container_width=True)
 
-# [TAB 2] Operations View (Merged New Requests)
+# [TAB 2] Operations View (Detailed Analysis with Smart Sorting)
 with tab_ops:
     # 1. 지사별 성과 & 부실 구분
     op_c1, op_c2 = st.columns([1, 1])
@@ -300,29 +318,40 @@ with tab_ops:
         st.plotly_chart(fig_bub, use_container_width=True)
 
     with op_c2:
-        st.subheader("⚠️ 부실 사유 (Insolvency)")
+        st.subheader("⚠️ 부실 사유 (Insolvency Types)")
         if '부실구분' in df_filtered.columns:
             bad_counts = df_filtered['부실구분'].value_counts().reset_index()
             bad_counts.columns = ['구분', '건수']
-            bad_counts = bad_counts[~bad_counts['구분'].isin(['-', 'Unclassified'])] # 제외
+            bad_counts = bad_counts[~bad_counts['구분'].isin(['-', 'Unclassified'])] 
             if not bad_counts.empty:
                 fig_bad = px.pie(bad_counts, values='건수', names='구분', hole=0.5, color_discrete_sequence=px.colors.qualitative.Bold)
                 fig_bad.update_traces(textinfo='percent+label')
                 st.plotly_chart(fig_bad, use_container_width=True)
             else:
-                st.info("조회된 데이터에 부실 내역이 없습니다.")
+                st.info("부실 데이터가 없습니다.")
 
     st.markdown("---")
 
-    # 2. 정지일수 구간 & 월정료 구간
+    # 2. 정지일수 구간 & 월정료 구간 (스마트 정렬 적용)
     op_c3, op_c4 = st.columns(2)
     
+    # 정렬 헬퍼 함수
+    def extract_number(s):
+        # 문자열에서 첫 번째 숫자를 추출하여 정렬 기준으로 사용
+        nums = re.findall(r'\d+', str(s))
+        return int(nums[0]) if nums else 0
+
     with op_c3:
         st.subheader("⏱️ 정지일수 구간 분포")
         if '당월말_정지일수_구간' in df_filtered.columns:
             susp_dist = df_filtered['당월말_정지일수_구간'].value_counts().reset_index()
             susp_dist.columns = ['구간', '건수']
-            fig_susp = px.bar(susp_dist, x='건수', y='구간', orientation='h', text='건수', title="구간별 건수", color='건수', color_continuous_scale='Reds')
+            # 숫자 기준 오름차순 정렬 (짧은 정지 -> 긴 정지)
+            susp_dist['sort_val'] = susp_dist['구간'].apply(extract_number)
+            susp_dist = susp_dist.sort_values('sort_val')
+            
+            fig_susp = px.bar(susp_dist, x='건수', y='구간', orientation='h', text='건수', 
+                              title="정지일수 구간별 건수", color='건수', color_continuous_scale='Reds')
             st.plotly_chart(fig_susp, use_container_width=True)
             
     with op_c4:
@@ -330,7 +359,12 @@ with tab_ops:
         if '월정료 구간' in df_filtered.columns:
             price_dist = df_filtered['월정료 구간'].value_counts().reset_index()
             price_dist.columns = ['구간', '건수']
-            fig_price = px.bar(price_dist, x='구간', y='건수', text='건수', title="가격대별 건수", color='건수', color_continuous_scale='Blues')
+            # 금액 기준 오름차순 정렬 (저가 -> 고가)
+            price_dist['sort_val'] = price_dist['구간'].apply(extract_number)
+            price_dist = price_dist.sort_values('sort_val')
+            
+            fig_price = px.bar(price_dist, x='구간', y='건수', text='건수', 
+                               title="가격대별 건수", color='건수', color_continuous_scale='Blues')
             st.plotly_chart(fig_price, use_container_width=True)
 
     # 3. 서비스 비중 (Treemap)
@@ -346,20 +380,20 @@ with tab_ops:
 with tab_data:
     st.subheader("💾 Intelligent Data Grid & Secure Export")
     
-    # Column Config
-    display_cols = ['본부', '지사', 'Period', '고객번호', '상호', '월정료(VAT미포함)', '정지,설변구분', '부실구분', 'KPI차감 10월말', '체납', '당월말_정지일수_구간']
+    display_cols = ['본부', '지사', 'Period', '고객번호', '상호', '월정료(VAT미포함)', '정지,설변구분', '부실구분', 'KPI차감 10월말', '체납', '당월말_정지일수_구간', '월정료 구간']
     valid_cols = [c for c in display_cols if c in df_filtered.columns]
     
     # Highlighting Logic
     def highlight_status(row):
         status = str(row.get('정지,설변구분', ''))
         kpi_target = str(row.get('KPI차감 10월말', ''))
+        bad_status = str(row.get('부실구분', ''))
         
         style = []
-        if '정지' in status:
-            return ['background-color: #fee2e2; color: #b91c1c'] * len(row) # Red for Suspension
+        if '정지' in status or (bad_status not in ['-', 'Unclassified']):
+            return ['background-color: #fee2e2; color: #b91c1c'] * len(row) # Red Risk
         elif '대상' in kpi_target:
-            return ['background-color: #e0e7ff; color: #3730a3; font-weight: bold'] * len(row) # Blue for KPI Target
+            return ['background-color: #e0e7ff; color: #3730a3; font-weight: bold'] * len(row) # Blue KPI
         return [''] * len(row)
 
     styled_df = df_filtered[valid_cols].style.apply(highlight_status, axis=1)
