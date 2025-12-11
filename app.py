@@ -109,7 +109,6 @@ inject_global_css()
 
 @st.cache_data(show_spinner=False)
 def load_data(path: str) -> pd.DataFrame:
-# """CSV 로드 + 기본 전처리."""
 try:
 df = pd.read_csv(path)
 except FileNotFoundError:
