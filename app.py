@@ -97,7 +97,7 @@ def inject_global_css() -> None:
         unsafe_allow_html=True,
     )
 
-```
+
 
 inject_global_css()
 
@@ -119,7 +119,7 @@ except Exception as e:
 st.error(f"데이터 로드 중 오류가 발생했습니다: {e}")
 return pd.DataFrame()
 
-```
+
 # --- 날짜 처리 ---
 if "이벤트시작일" in df.columns:
     df["이벤트시작일"] = pd.to_datetime(df["이벤트시작일"], errors="coerce")
@@ -162,7 +162,7 @@ for col in fill_cols:
         df[col] = df[col].fillna("미분류")
 
 return df
-```
+
 
 df = load_data(DATA_PATH)
 if df.empty:
@@ -187,7 +187,7 @@ def render_filters(data: pd.DataFrame) -> pd.DataFrame:
 with st.container():
 st.markdown('<div class="filter-box">', unsafe_allow_html=True)
 
-```
+
     # ---------------------------
     # [1] 본부 선택
     # ---------------------------
@@ -268,7 +268,7 @@ filtered = data[
 ].copy()
 
 return filtered
-```
+
 
 df_filtered = render_filters(df)
 
@@ -434,7 +434,7 @@ if "분석기간" in df_filtered.columns and not df_filtered.empty:
     st.plotly_chart(fig_trend, use_container_width=True)
 else:
     st.info("기간별 추이를 계산할 수 있는 데이터가 없습니다.")
-```
+
 
 # -----------------------------------------------------------------------------
 
