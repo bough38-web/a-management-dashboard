@@ -46,32 +46,12 @@ st.markdown("""
             padding: 15px 20px;
             border-radius: 12px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.04);
-            border-left: 5px solid #4f46e5; /* Indigo accent */
+            border-left: 5px solid #4f46e5;
             transition: transform 0.2s ease-in-out;
         }
         div[data-testid="stMetric"]:hover {
             transform: translateY(-5px);
             box-shadow: 0 10px 15px rgba(0,0,0,0.1);
-        }
-        
-        /* 탭 디자인 커스텀 */
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 12px;
-            background-color: transparent;
-        }
-        .stTabs [data-baseweb="tab"] {
-            height: 45px;
-            background-color: #ffffff;
-            border-radius: 30px;
-            padding: 0px 24px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.03);
-            font-weight: 600;
-            border: 1px solid #e5e7eb;
-        }
-        .stTabs [aria-selected="true"] {
-            background-color: #4f46e5;
-            color: white;
-            border: none;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -114,7 +94,7 @@ if df.empty:
     st.stop()
 
 # -----------------------------------------------------------------------------
-# 3. Dynamic Filters (Expert Technique: Session State & Interactivity)
+# 3. Dynamic Filters (동적 필터링 시스템)
 # -----------------------------------------------------------------------------
 st.title("💎 KTT Executive Dashboard")
 st.markdown("### 🎯 Smart Filtering System")
@@ -124,13 +104,16 @@ with st.container():
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     
     # [Step 1] 본부 선택 (Pills)
+    # 본부 목록 추출 및 정렬
     all_hqs = sorted(df['본부'].unique().tolist())
     st.markdown("**1. 본부 선택 (Headquarters)**")
     
     # st.pills 사용 (Streamlit >= 1.40.0)
     try:
+        # key를 지정하여 상태 관리
         selected_hq = st.pills("본부를 선택하세요", all_hqs, selection_mode="multi", default=all_hqs, key="hq_pills")
     except AttributeError:
+        # 구버전 호환성 fallback
         selected_hq = st.multiselect("본부 선택", all_hqs, default=all_hqs)
     
     if not selected_hq:
@@ -138,9 +121,9 @@ with st.container():
 
     # [Step 2] 지사 선택 (Dynamic Button Generation based on HQ)
     st.markdown("---")
-    st.markdown(f"**2. 지사 선택 (Branches) - {', '.join(selected_hq) if len(selected_hq)<3 else '다수 본부'} 소속**")
+    st.markdown(f"**2. 지사 선택 (Branches)**")
     
-    # 본부에 해당하는 지사만 필터링
+    # 선택된 본부에 해당하는 지사만 필터링 (핵심 로직)
     available_branches = sorted(df[df['본부'].isin(selected_hq)]['지사'].unique().tolist())
     
     # 지사가 너무 많으면 Expandable 영역에 넣어서 UI 깔끔하게 유지
@@ -168,7 +151,7 @@ df_filtered = df[
 ]
 
 # -----------------------------------------------------------------------------
-# 4. KPI & Metrics (Expert Contextual Display)
+# 4. KPI & Metrics
 # -----------------------------------------------------------------------------
 total_cnt = len(df_filtered)
 total_amt = df_filtered['월정료(VAT미포함)'].sum()
@@ -178,7 +161,6 @@ insolvency_cnt = len(df_filtered[df_filtered['부실구분'].notnull() & (df_fil
 st.markdown("### 🚀 Performance Overview")
 k1, k2, k3, k4 = st.columns(4)
 
-# 고급 포맷팅 함수
 def format_currency(val):
     return f"₩{val/10000:,.0f} 만"
 
@@ -203,9 +185,10 @@ with tab_trend:
         hq_agg = df_filtered.groupby('본부').agg({'계약번호':'count', '월정료(VAT미포함)':'sum'}).reset_index()
         
         fig_dual = make_subplots(specs=[[{"secondary_y": True}]])
+        # [수정 완료] radius 파라미터 삭제됨
         fig_dual.add_trace(
             go.Bar(x=hq_agg['본부'], y=hq_agg['계약번호'], name="계약 건수", 
-                   marker_color='#4f46e5', opacity=0.8, radius=5),
+                   marker_color='#4f46e5', opacity=0.8),
             secondary_y=False
         )
         fig_dual.add_trace(
@@ -267,16 +250,14 @@ with tab_detail:
         fig_funnel.update_layout(template="simple_white")
         st.plotly_chart(fig_funnel, use_container_width=True)
 
-# TAB 3: 스마트 데이터 그리드 (Conditional Formatting)
+# TAB 3: 스마트 데이터 그리드
 with tab_grid:
     st.markdown("### 💾 Intelligent Data Grid")
     
-    # 주요 컬럼만 선택해서 보여주기
     display_cols = ['본부', '지사', '고객번호', '상호', '월정료(VAT미포함)', '정지,설변구분', '이벤트시작일', '부실구분']
     valid_cols = [c for c in display_cols if c in df_filtered.columns]
     
-    # 스타일링된 데이터프레임 (조건부 서식)
-    # 정지나 설변인 경우 배경색을 살짝 붉게 표시하는 로직
+    # 정지나 설변인 경우 배경색 표시
     def highlight_risk(row):
         val = str(row.get('정지,설변구분', ''))
         if '정지' in val:
@@ -298,10 +279,9 @@ with tab_grid:
         }
     )
     
-    # CSV 다운로드
     csv_data = df_filtered.to_csv(index=False).encode('utf-8-sig')
     st.download_button(
-        label="📥 전체 데이터 다운로드 (Excel 호환 CSV)",
+        label="📥 전체 데이터 다운로드 (CSV)",
         data=csv_data,
         file_name="ktt_premium_data.csv",
         mime="text/csv"
