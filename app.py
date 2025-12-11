@@ -109,7 +109,7 @@ def load_enterprise_data():
     try:
         df = pd.read_csv(file_path)
     except FileNotFoundError:
-        st.error("🚨 시스템 에러: 데이터 파일(data.csv)을 찾을 수 없습니다. 관리자에게 문의하세요.")
+        st.error("🚨 시스템 에러: 데이터 파일(data.csv)을 찾을 수 없습니다.")
         return pd.DataFrame()
 
     # [Logic 1] 날짜 그룹화 엔진
@@ -198,14 +198,13 @@ with st.container():
             
     if not selected_branch: selected_branch = valid_branches
     
-    # [3] 추가 조건 필터 (KPI 대상, 체납 등)
+    # [3] 추가 조건 필터 (통합 요청 사항)
     st.markdown("---")
     c_filt1, c_filt2, c_filt3 = st.columns(3)
     
     # KPI 대상 필터
     with c_filt1:
         st.markdown("##### 🎯 KPI 차감 대상")
-        # KPI차감 10월말 컬럼에 '대상'이라는 글자가 포함된 데이터만 필터링
         kpi_target = st.toggle("KPI 차감 '대상' 건만 보기", value=False)
         
     # 체납 필터
@@ -219,11 +218,9 @@ with st.container():
 mask = (df['본부'].isin(selected_hq)) & (df['지사'].isin(selected_branch))
 
 if kpi_target:
-    # "대상" 텍스트가 포함된 경우
     mask = mask & (df['KPI차감 10월말'].str.contains('대상', na=False))
 
 if arrears_only:
-    # 체납이 '-'나 'Unclassified'가 아닌 경우 (데이터가 있는 경우)
     mask = mask & (df['체납'] != '-') & (df['체납'] != 'Unclassified')
 
 df_filtered = df[mask]
@@ -250,11 +247,11 @@ col_k4.metric("Risk Alert (정지)", f"{risk_cases:,.0f} 건", f"Risk Rate: {ris
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# 5. Enterprise Analytics (Advanced Visualizations)
+# 5. Enterprise Analytics (All Visuals Integrated)
 # -----------------------------------------------------------------------------
 tab_strategy, tab_ops, tab_data = st.tabs(["📊 전략 분석 (Strategy)", "🔍 운영 분석 (Operations)", "💾 데이터 그리드 (Data)"])
 
-# [TAB 1] Strategy View
+# [TAB 1] Strategy View (Trend, Sunburst, Pareto)
 with tab_strategy:
     r1_c1, r1_c2 = st.columns([2, 1])
     
@@ -288,62 +285,62 @@ with tab_strategy:
     fig_dual.update_layout(template="plotly_white", height=450, hovermode="x unified", legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center"))
     st.plotly_chart(fig_dual, use_container_width=True)
 
-# [TAB 2] Operations View (New Visuals Added!)
+# [TAB 2] Operations View (Merged New Requests)
 with tab_ops:
-    # 1. 부실구분 & 정지일수 구간
-    st.subheader("⚠️ 리스크 집중 분석 (Risk Factors)")
-    op_c1, op_c2 = st.columns(2)
+    # 1. 지사별 성과 & 부실 구분
+    op_c1, op_c2 = st.columns([1, 1])
     
     with op_c1:
-        st.markdown("**1. 부실 구분 상세 (Insolvency Type)**")
+        st.subheader("📊 지사별 성과 매트릭스")
+        branch_kpi = df_filtered.groupby(['본부', '지사']).agg({
+            '계약번호': 'count', '월정료(VAT미포함)': ['mean', 'sum']
+        }).reset_index()
+        branch_kpi.columns = ['본부', '지사', '건수', '평균단가', '총매출']
+        fig_bub = px.scatter(branch_kpi, x='건수', y='평균단가', size='총매출', color='본부', hover_name='지사', template="plotly_white", color_discrete_sequence=px.colors.qualitative.G10)
+        st.plotly_chart(fig_bub, use_container_width=True)
+
+    with op_c2:
+        st.subheader("⚠️ 부실 사유 (Insolvency)")
         if '부실구분' in df_filtered.columns:
             bad_counts = df_filtered['부실구분'].value_counts().reset_index()
             bad_counts.columns = ['구분', '건수']
-            # '-' 제외하고 시각화
-            bad_counts = bad_counts[bad_counts['구분'] != '-']
-            bad_counts = bad_counts[bad_counts['구분'] != 'Unclassified']
-            
+            bad_counts = bad_counts[~bad_counts['구분'].isin(['-', 'Unclassified'])] # 제외
             if not bad_counts.empty:
                 fig_bad = px.pie(bad_counts, values='건수', names='구분', hole=0.5, color_discrete_sequence=px.colors.qualitative.Bold)
                 fig_bad.update_traces(textinfo='percent+label')
                 st.plotly_chart(fig_bad, use_container_width=True)
             else:
                 st.info("조회된 데이터에 부실 내역이 없습니다.")
-                
-    with op_c2:
-        st.markdown("**2. 정지일수 구간 분포 (Suspension Duration)**")
-        if '당월말_정지일수_구간' in df_filtered.columns:
-            susp_dist = df_filtered['당월말_정지일수_구간'].value_counts().reset_index()
-            susp_dist.columns = ['구간', '건수']
-            # 구간 순서 정렬이 어려우므로 건수 기준 내림차순
-            susp_dist = susp_dist.sort_values('건수', ascending=True)
-            
-            fig_susp = px.bar(susp_dist, x='건수', y='구간', orientation='h', text='건수',
-                              title="정지일수 구간별 건수", color='건수', color_continuous_scale='Reds')
-            st.plotly_chart(fig_susp, use_container_width=True)
 
     st.markdown("---")
 
-    # 2. 월정료 구간 & 서비스 점유율
+    # 2. 정지일수 구간 & 월정료 구간
     op_c3, op_c4 = st.columns(2)
     
     with op_c3:
-        st.markdown("**3. 월정료 가격대 분포 (Pricing Tier)**")
+        st.subheader("⏱️ 정지일수 구간 분포")
+        if '당월말_정지일수_구간' in df_filtered.columns:
+            susp_dist = df_filtered['당월말_정지일수_구간'].value_counts().reset_index()
+            susp_dist.columns = ['구간', '건수']
+            fig_susp = px.bar(susp_dist, x='건수', y='구간', orientation='h', text='건수', title="구간별 건수", color='건수', color_continuous_scale='Reds')
+            st.plotly_chart(fig_susp, use_container_width=True)
+            
+    with op_c4:
+        st.subheader("💰 월정료 가격대 분포")
         if '월정료 구간' in df_filtered.columns:
             price_dist = df_filtered['월정료 구간'].value_counts().reset_index()
             price_dist.columns = ['구간', '건수']
-            
-            fig_price = px.bar(price_dist, x='구간', y='건수', text='건수',
-                               title="월정료 구간별 분포", color='건수', color_continuous_scale='Blues')
+            fig_price = px.bar(price_dist, x='구간', y='건수', text='건수', title="가격대별 건수", color='건수', color_continuous_scale='Blues')
             st.plotly_chart(fig_price, use_container_width=True)
-            
-    with op_c4:
-        st.markdown("**4. 서비스 점유율 (Service Share)**")
-        if '서비스(소)' in df_filtered.columns:
-            svc_tree = df_filtered['서비스(소)'].value_counts().reset_index()
-            svc_tree.columns = ['서비스명', '건수']
-            fig_tree = px.treemap(svc_tree.head(15), path=['서비스명'], values='건수', color='건수', color_continuous_scale='Tealgrn')
-            st.plotly_chart(fig_tree, use_container_width=True)
+
+    # 3. 서비스 비중 (Treemap)
+    st.markdown("---")
+    st.subheader("🧩 서비스/상품 점유율")
+    if '서비스(소)' in df_filtered.columns:
+        svc_tree = df_filtered['서비스(소)'].value_counts().reset_index()
+        svc_tree.columns = ['서비스명', '건수']
+        fig_tree = px.treemap(svc_tree.head(20), path=['서비스명'], values='건수', color='건수', color_continuous_scale='Tealgrn')
+        st.plotly_chart(fig_tree, use_container_width=True)
 
 # [TAB 3] Data Grid with Secure Download
 with tab_data:
@@ -353,15 +350,16 @@ with tab_data:
     display_cols = ['본부', '지사', 'Period', '고객번호', '상호', '월정료(VAT미포함)', '정지,설변구분', '부실구분', 'KPI차감 10월말', '체납', '당월말_정지일수_구간']
     valid_cols = [c for c in display_cols if c in df_filtered.columns]
     
+    # Highlighting Logic
     def highlight_status(row):
         status = str(row.get('정지,설변구분', ''))
         kpi_target = str(row.get('KPI차감 10월말', ''))
         
         style = []
         if '정지' in status:
-            return ['background-color: #fee2e2; color: #b91c1c'] * len(row)
-        elif '대상' in kpi_target: # KPI 대상 강조
-            return ['background-color: #e0e7ff; color: #3730a3; font-weight: bold'] * len(row)
+            return ['background-color: #fee2e2; color: #b91c1c'] * len(row) # Red for Suspension
+        elif '대상' in kpi_target:
+            return ['background-color: #e0e7ff; color: #3730a3; font-weight: bold'] * len(row) # Blue for KPI Target
         return [''] * len(row)
 
     styled_df = df_filtered[valid_cols].style.apply(highlight_status, axis=1)
@@ -386,8 +384,8 @@ with tab_data:
         st.write("") 
         st.write("") 
         if password == "3867":
-            st.success("✅ 인증 성공!")
+            st.success("✅ 인증 성공! 다운로드가 가능합니다.")
             csv_data = df_filtered.to_csv(index=False).encode('utf-8-sig')
             st.download_button("📥 데이터 다운로드 (Encrypted CSV)", csv_data, 'ktt_secure_data.csv', 'text/csv')
         elif password:
-            st.error("⚠️ 비밀번호 불일치")
+            st.error("⚠️ 비밀번호가 일치하지 않습니다.")
