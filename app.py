@@ -27,7 +27,7 @@ st.markdown("""
 @st.cache_data
 def load_data():
     # 파일 경로 설정 (실제 배포 시에는 경로를 상대 경로로 맞춰주세요)
-    file_path = "a_전사부실일일.xlsx - 정지_부실_통합_설변포함.csv"
+    file_path = "data.csv"
     
     try:
         df = pd.read_csv(file_path)
