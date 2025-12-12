@@ -6,394 +6,431 @@ from plotly.subplots import make_subplots
 import re
 
 # -----------------------------------------------------------------------------
-# 1. Enterprise Config & Style
+# 1. Enterprise Config & Expert Design System
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="KTT Enterprise Analytics",
     page_icon="🏢",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded" # 사이드바 기본 열림 상태로 변경
 )
 
-# [CSS] Refined Design System
+# [CSS] Top-tier Dashboard Styling
 st.markdown("""
     <style>
         @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
         
-        /* Global Font & Reset */
+        /* 1. Global Reset */
         html, body, [class*="css"] {
             font-family: 'Pretendard', sans-serif;
             color: #1e293b;
         }
         .stApp {
-            background-color: #f8fafc;
+            background-color: #f8fafc; /* Slate-50 */
         }
         
-        /* Custom Header */
+        /* 2. Sidebar Styling */
+        [data-testid="stSidebar"] {
+            background-color: #ffffff;
+            border-right: 1px solid #e2e8f0;
+        }
+        [data-testid="stSidebar"] .block-container {
+            padding-top: 2rem;
+        }
+        
+        /* 3. Header Gradient */
         .main-title {
             font-size: 2.2rem;
             font-weight: 800;
             background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            margin-bottom: 0.5rem;
-        }
-        .sub-header {
-            font-size: 1rem;
-            color: #64748b;
-            margin-bottom: 2rem;
+            margin-bottom: 5px;
         }
         
-        /* Sidebar Polish */
-        [data-testid="stSidebar"] {
-            background-color: #ffffff;
-            border-right: 1px solid #e2e8f0;
+        /* 4. Advanced Card Container (Main) */
+        .card-container {
+            background: #ffffff;
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+            border: 1px solid #e2e8f0;
+            margin-bottom: 25px;
         }
+        
+        /* 5. Stylish Pills Buttons */
+        div[data-testid="stPills"] { gap: 6px; flex-wrap: wrap; }
+        div[data-testid="stPills"] button[aria-selected="true"] {
+            background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important;
+            color: white !important;
+            border: none;
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
+            font-weight: 600;
+            padding: 4px 12px;
+            transition: all 0.3s ease;
+        }
+        div[data-testid="stPills"] button[aria-selected="false"] {
+            background-color: #f8fafc !important;
+            border: 1px solid #cbd5e1 !important;
+            color: #64748b !important;
+            font-weight: 500;
+        }
+        div[data-testid="stPills"] button:hover {
+            transform: translateY(-1px);
+            border-color: #6366f1 !important;
+            color: #6366f1 !important;
+        }
+        
+        /* 6. Metric Cards */
+        div[data-testid="stMetric"] {
+            background-color: white;
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            transition: all 0.2s;
+        }
+        div[data-testid="stMetric"]:hover {
+            border-color: #6366f1;
+            box-shadow: 0 8px 16px -4px rgba(99, 102, 241, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        /* 7. Sidebar Headers */
         .sidebar-header {
             font-size: 0.9rem;
             font-weight: 700;
             color: #475569;
-            margin: 15px 0 8px 0;
+            margin-bottom: 8px;
+            margin-top: 15px;
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            justify-content: space-between;
         }
         .count-badge {
             background-color: #e0e7ff;
             color: #4338ca;
-            font-size: 0.75rem;
-            padding: 2px 8px;
-            border-radius: 12px;
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 10px;
             font-weight: 600;
-        }
-        
-        /* Metric Cards Enhancement */
-        div[data-testid="stMetric"] {
-            background-color: white;
-            padding: 15px 20px;
-            border-radius: 12px;
-            border: 1px solid #e2e8f0;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-            transition: box-shadow 0.2s ease;
-        }
-        div[data-testid="stMetric"]:hover {
-            border-color: #6366f1;
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
         }
     </style>
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 2. Helper Functions (Logic & Charts)
+# 2. Data Loading & Logic
 # -----------------------------------------------------------------------------
 def format_korean_currency(value):
-    """Formats large numbers into Korean currency units."""
     if value == 0: return "0"
-    abs_val = abs(value)
-    if abs_val >= 100_000_000: return f"{value/100_000_000:,.1f}억"
-    elif abs_val >= 1_000_000: return f"{value/1_000_000:,.1f}백만"
+    elif abs(value) >= 100_000_000: return f"{value/100_000_000:,.1f}억"
+    elif abs(value) >= 1_000_000: return f"{value/1_000_000:,.1f}백만"
     else: return f"{value/1_000:,.0f}천"
 
-def safe_extract_num(s):
-    """Safely extracts the first number from a string."""
-    try:
-        nums = re.findall(r'\d+', str(s))
-        return int(nums[0]) if nums else 0
-    except:
-        return 0
-
-def create_bar_chart(df, x, y, color=None, orientation='v', text=None, title=None, height=400):
-    """Factory function for consistent bar charts."""
-    fig = px.bar(
-        df, x=x, y=y, color=color, text=text, orientation=orientation,
-        title=title, color_discrete_sequence=px.colors.qualitative.Prism
-    )
-    fig.update_layout(
-        template="plotly_white", 
-        height=height, 
-        margin=dict(l=20, r=20, t=40 if title else 20, b=20),
-        xaxis_title=None, 
-        yaxis_title=None
-    )
-    return fig
-
-# -----------------------------------------------------------------------------
-# 3. Data Loading
-# -----------------------------------------------------------------------------
 @st.cache_data
-def load_data():
+def load_enterprise_data():
     file_path = "data.csv"
     try:
         df = pd.read_csv(file_path)
     except FileNotFoundError:
-        # Fallback: Create dummy data for demonstration if file is missing
-        st.warning("⚠️ 'data.csv' 파일을 찾을 수 없어 데모 데이터를 생성합니다.")
-        data = {
-            '본부': ['서울본부', '경기본부', '부산본부'] * 50,
-            '지사': ['강남지사', '수원지사', '해운대지사'] * 50,
-            '구역담당영업사원': [f'매니저{i}' for i in range(150)],
-            '이벤트시작일': pd.date_range(start='2024-01-01', periods=150, freq='D'),
-            '월정료(VAT미포함)': [x * 10000 for x in range(1, 151)],
-            '정지,설변구분': ['정지', '설변', '정지'] * 50,
-            '당월말_정지일수': [x % 30 for x in range(150)],
-            'KPI차감여부': ['대상', '비대상'] * 75,
-            '체납': ['-'] * 140 + ['Y'] * 10,
-            '계약번호': range(1000, 1150)
-        }
-        df = pd.DataFrame(data)
+        st.error("🚨 시스템 에러: 데이터 파일(data.csv)을 찾을 수 없습니다.")
+        return pd.DataFrame()
 
-    # 1. Column Standardization
-    col_map = {'조회구분': '정지,설변구분'}
-    df.rename(columns=col_map, inplace=True)
+    # 컬럼 매핑
+    if '조회구분' in df.columns:
+        df['정지,설변구분'] = df['조회구분']
     
-    # 2. Type Conversion
-    if '월정료(VAT미포함)' in df.columns and df['월정료(VAT미포함)'].dtype == object:
-        df['월정료(VAT미포함)'] = (df['월정료(VAT미포함)'].astype(str)
-                                 .str.replace(',', '')
-                                 .apply(pd.to_numeric, errors='coerce')
-                                 .fillna(0))
-    
-    num_cols = ['계약번호', '당월말_정지일수']
-    for col in num_cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-
-    # 3. Date Processing
-    if '이벤트시작일' in df.columns:
-        df['이벤트시작일'] = pd.to_datetime(df['이벤트시작일'], errors='coerce')
-        df['Period'] = df['이벤트시작일'].apply(
-            lambda x: f"'{str(x.year)[-2:]}.{x.month}" if pd.notnull(x) and x.year >= 2025 else ("2024년 이전" if pd.notnull(x) else "기간 미상")
-        )
-        df['SortKey'] = df['이벤트시작일'].fillna(pd.Timestamp.min)
-
-    # 4. KPI Status Logic
     kpi_cols = [c for c in df.columns if 'KPI차감' in c]
     df['KPI_Status'] = df[kpi_cols[0]] if kpi_cols else '-'
 
-    # 5. Missing Value Handling
-    fill_cols = ['본부', '지사', '출동/영상', 'L형/i형', '서비스(소)', '부실구분', '체납', '실적채널', '구역담당영업사원']
-    for col in fill_cols:
-        if col not in df.columns: df[col] = "미분류"
+    # 날짜 그룹화
+    if '이벤트시작일' in df.columns:
+        df['이벤트시작일'] = pd.to_datetime(df['이벤트시작일'], errors='coerce')
+        def categorize_period(dt):
+            if pd.isnull(dt): return "기간 미상"
+            if dt.year < 2025: return "2024년 이전"
+            else: return f"'{str(dt.year)[-2:]}.{dt.month}"
+        df['Period'] = df['이벤트시작일'].apply(categorize_period)
+        
+        def get_sort_key(dt):
+            if pd.isnull(dt): return pd.Timestamp.min
+            if dt.year < 2025: return pd.Timestamp("2024-12-31")
+            return dt
+        df['SortKey'] = df['이벤트시작일'].apply(get_sort_key)
+    
+    # 수치 변환
+    if '월정료(VAT미포함)' in df.columns:
+        df['월정료(VAT미포함)'] = df['월정료(VAT미포함)'].astype(str).str.replace(',', '').apply(pd.to_numeric, errors='coerce').fillna(0)
+    
+    for col in ['계약번호', '당월말_정지일수']:
+        if col in df.columns: df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    
+    # 결측 처리
+    target_cols = ['본부', '지사', '출동/영상', 'L형/i형', '정지,설변구분', '서비스(소)', '부실구분', '체납', '실적채널', '구역담당영업사원']
+    for col in target_cols:
+        if col not in df.columns: df[col] = "Unclassified"
         else: df[col] = df[col].fillna("미지정")
             
     return df
 
-df = load_data()
+df = load_enterprise_data()
+if df.empty: st.stop()
 
 # -----------------------------------------------------------------------------
-# 4. Sidebar Controller
+# 3. Sidebar Control Center
 # -----------------------------------------------------------------------------
 with st.sidebar:
-    st.markdown("### 🎛️ Analytics Controller")
+    st.markdown("### 🎛️ Control Panel")
     st.markdown("---")
     
-    # 1. HQ Selection
-    all_hqs = sorted(df['본부'].unique())
-    st.markdown(f'<div class="sidebar-header">🏢 본부 <span class="count-badge">{len(all_hqs)}</span></div>', unsafe_allow_html=True)
+    # [1] 본부 선택
+    all_hqs = sorted(df['본부'].unique().tolist())
+    st.markdown(f'<div class="sidebar-header">🏢 본부 선택 <span class="count-badge">{len(all_hqs)}</span></div>', unsafe_allow_html=True)
     
-    # Try using st.pills if available (Streamlit >= 1.40)
+    if "hq_select" not in st.session_state: st.session_state.hq_select = all_hqs
     try:
-        selected_hq = st.pills("HQ", all_hqs, selection_mode="multi", default=all_hqs, label_visibility="collapsed")
-    except AttributeError:
-        selected_hq = st.multiselect("HQ", all_hqs, default=all_hqs, label_visibility="collapsed")
-    
-    if not selected_hq: selected_hq = all_hqs # Fallback to all if none selected
+        selected_hq = st.pills("HQ", all_hqs, selection_mode="multi", default=all_hqs, key="hq_pills", label_visibility="collapsed")
+    except:
+        selected_hq = st.multiselect("HQ", all_hqs, default=all_hqs)
+    if not selected_hq: selected_hq = all_hqs
 
-    # 2. Branch Selection (Cascading)
-    filtered_hq_df = df[df['본부'].isin(selected_hq)]
-    valid_branches = sorted(filtered_hq_df['지사'].unique())
+    # [2] 지사 선택
+    valid_branches = sorted(df[df['본부'].isin(selected_hq)]['지사'].unique().tolist())
+    st.markdown(f'<div class="sidebar-header">📍 지사 선택 <span class="count-badge">{len(valid_branches)}</span></div>', unsafe_allow_html=True)
     
-    st.markdown(f'<div class="sidebar-header">📍 지사 <span class="count-badge">{len(valid_branches)}</span></div>', unsafe_allow_html=True)
-    with st.expander("지사 선택", expanded=True):
-        selected_branch = st.multiselect("Branch", valid_branches, default=valid_branches, label_visibility="collapsed")
+    with st.expander(f"지사 목록 ({len(valid_branches)}개) 펼치기", expanded=False):
+        try:
+            selected_branch = st.pills("Branch", valid_branches, selection_mode="multi", default=valid_branches, key="br_pills", label_visibility="collapsed")
+        except:
+            selected_branch = st.multiselect("Branch", valid_branches, default=valid_branches)
     if not selected_branch: selected_branch = valid_branches
 
-    # 3. Manager Selection (Cascading)
-    filtered_br_df = filtered_hq_df[filtered_hq_df['지사'].isin(selected_branch)]
-    valid_managers = sorted(filtered_br_df['구역담당영업사원'].unique())
+    # [3] 담당자 선택
+    valid_managers = sorted(df[
+        (df['본부'].isin(selected_hq)) & 
+        (df['지사'].isin(selected_branch))
+    ]['구역담당영업사원'].unique().tolist())
+    if "미지정" in valid_managers:
+        valid_managers.remove("미지정")
+        valid_managers.append("미지정")
+
+    st.markdown(f'<div class="sidebar-header">👤 담당자 선택 <span class="count-badge">{len(valid_managers)}</span></div>', unsafe_allow_html=True)
     
-    st.markdown(f'<div class="sidebar-header">👤 담당자 <span class="count-badge">{len(valid_managers)}</span></div>', unsafe_allow_html=True)
-    with st.expander("담당자 선택", expanded=False):
-        selected_managers = st.multiselect("Manager", valid_managers, default=valid_managers, label_visibility="collapsed", placeholder="검색...")
+    with st.expander(f"담당자 목록 ({len(valid_managers)}명) 펼치기", expanded=False):
+        if len(valid_managers) > 50:
+             selected_managers = st.multiselect("Manager", valid_managers, default=valid_managers, label_visibility="collapsed", placeholder="담당자 검색")
+        else:
+            try:
+                selected_managers = st.pills("Manager", valid_managers, selection_mode="multi", default=valid_managers, key="mgr_pills", label_visibility="collapsed")
+            except:
+                selected_managers = st.multiselect("Manager", valid_managers, default=valid_managers)
+    
     if not selected_managers: selected_managers = valid_managers
 
     st.markdown("---")
-    
-    # 4. Global Settings
-    st.markdown('<div class="sidebar-header">📊 분석 기준</div>', unsafe_allow_html=True)
-    metric_mode = st.radio("Metric Mode", ["건수 (Volume)", "금액 (Revenue)"], horizontal=True, label_visibility="collapsed")
-    
-    st.markdown('<div class="sidebar-header">⚙️ 필터 옵션</div>', unsafe_allow_html=True)
-    c1, c2 = st.columns(2)
-    kpi_target = c1.checkbox("KPI 대상", False)
-    arrears_only = c2.checkbox("체납 건", False)
 
-# [Logic] Final Data Filtering
+    # [4] 분석 기준 및 옵션
+    st.markdown('<div class="sidebar-header">📊 분석 기준</div>', unsafe_allow_html=True)
+    try:
+        metric_mode = st.pills("Metric", ["건수 (Volume)", "금액 (Revenue)"], default="건수 (Volume)", selection_mode="single", label_visibility="collapsed")
+    except:
+        metric_mode = st.radio("Metric", ["건수 (Volume)", "금액 (Revenue)"], horizontal=True)
+            
+    st.markdown('<div class="sidebar-header">⚙️ 고급 필터</div>', unsafe_allow_html=True)
+    kpi_target = st.toggle("🎯 KPI 차감 대상만 보기", False)
+    arrears_only = st.toggle("💰 체납 건만 보기", False)
+    
+    st.markdown("---")
+    st.caption(f"Update: {pd.Timestamp.now().strftime('%Y-%m-%d')}")
+
+# [CORE LOGIC] Filter Application
 mask = (df['본부'].isin(selected_hq)) & \
        (df['지사'].isin(selected_branch)) & \
        (df['구역담당영업사원'].isin(selected_managers))
 
-if kpi_target: mask &= (df['KPI_Status'].str.contains('대상', na=False))
-if arrears_only: mask &= (~df['체납'].isin(['-', '미분류', '미지정']))
+if kpi_target: mask = mask & (df['KPI_Status'].str.contains('대상', na=False))
+if arrears_only: mask = mask & (df['체납'] != '-') & (df['체납'] != 'Unclassified') & (df['체납'] != '미지정')
 
-df_filtered = df[mask].copy()
+df_filtered = df[mask]
 
-# Dynamic Constants
+# Global Config
 VAL_COL = '계약번호' if metric_mode == "건수 (Volume)" else '월정료(VAT미포함)'
 AGG_FUNC = 'count' if metric_mode == "건수 (Volume)" else 'sum'
 FMT_FUNC = (lambda x: f"{x:,.0f}건") if metric_mode == "건수 (Volume)" else format_korean_currency
-TEXT_TEMPLATE = '%{text:,.0f}' if metric_mode == "건수 (Volume)" else '%{text:.2s}'
 
 # -----------------------------------------------------------------------------
-# 5. Main Dashboard
+# 4. Main Dashboard Area
 # -----------------------------------------------------------------------------
 st.markdown('<div class="main-title">KTT Enterprise Analytics</div>', unsafe_allow_html=True)
-st.markdown(f'<div class="sub-header">Data as of {pd.Timestamp.now().strftime("%Y-%m-%d")} | Total Records: {len(df_filtered):,}</div>', unsafe_allow_html=True)
+st.caption("Strategic Insights & Operational Dashboard")
 
-# KPI Section
-with st.container():
-    k1, k2, k3, k4 = st.columns(4)
-    
-    susp_df = df_filtered[df_filtered['정지,설변구분'] == '정지']
-    chg_df = df_filtered[df_filtered['정지,설변구분'] == '설변']
-    
-    val_susp = len(susp_df) if metric_mode == "건수 (Volume)" else susp_df['월정료(VAT미포함)'].sum()
-    val_chg = len(chg_df) if metric_mode == "건수 (Volume)" else chg_df['월정료(VAT미포함)'].sum()
-    
-    avg_dur = df_filtered['당월말_정지일수'].mean() if not df_filtered.empty else 0
-    risk_rate = (len(susp_df) / len(df_filtered) * 100) if len(df_filtered) > 0 else 0
+# KPI Summary
+st.markdown("### 🚀 Executive Summary")
+k1, k2, k3, k4 = st.columns(4)
 
-    k1.metric("⛔ 정지 (Suspension)", FMT_FUNC(val_susp), help="Total Suspension")
-    k2.metric("🔄 설변 (Change)", FMT_FUNC(val_chg), help="Total Change")
-    k3.metric("📅 평균 정지일수", f"{avg_dur:.1f} 일")
-    k4.metric("⚠️ 정지 리스크율", f"{risk_rate:.1f}%", delta_color="inverse")
+susp_df = df_filtered[df_filtered['정지,설변구분'] == '정지']
+chg_df = df_filtered[df_filtered['정지,설변구분'] == '설변']
+
+if metric_mode == "건수 (Volume)":
+    v1, v2 = len(susp_df), len(chg_df)
+    l1, l2 = "정지 건수", "설변 건수"
+else:
+    v1, v2 = susp_df['월정료(VAT미포함)'].sum(), chg_df['월정료(VAT미포함)'].sum()
+    l1, l2 = "정지 금액", "설변 금액"
+
+k1.metric(f"⛔ {l1}", FMT_FUNC(v1), "Suspension Total")
+k2.metric(f"🔄 {l2}", FMT_FUNC(v2), "Change Total")
+k3.metric("📅 평균 정지일수", f"{df_filtered['당월말_정지일수'].mean():.1f} 일", "Avg Duration")
+risk_rate = (len(susp_df) / len(df_filtered) * 100) if len(df_filtered) > 0 else 0
+k4.metric("⚠️ 정지 비율", f"{risk_rate:.1f}%", "Rate", delta_color="inverse")
 
 st.markdown("---")
 
-# Tabs
+# -----------------------------------------------------------------------------
+# 5. Advanced Analytics (Tabs)
+# -----------------------------------------------------------------------------
 tab_strategy, tab_ops, tab_data = st.tabs(["📊 전략 분석", "🔍 운영 분석", "💾 데이터 그리드"])
 
 # [TAB 1] Strategy
 with tab_strategy:
-    c1, c2 = st.columns([2, 1])
-    
-    with c1:
-        st.markdown("##### 📈 실적 트렌드")
-        if 'Period' in df_filtered.columns and not df_filtered.empty:
+    r1_c1, r1_c2 = st.columns([2, 1])
+    with r1_c1:
+        st.markdown("##### 📅 실적 트렌드")
+        if 'Period' in df_filtered.columns:
             trend_df = df_filtered.groupby(['Period', 'SortKey'])[VAL_COL].agg(AGG_FUNC).reset_index().sort_values('SortKey')
             fig_trend = px.area(trend_df, x='Period', y=VAL_COL, markers=True)
             fig_trend.update_traces(line_color='#4f46e5', fillcolor='rgba(79, 70, 229, 0.1)')
-            fig_trend.update_layout(template="plotly_white", height=380, margin=dict(l=20, r=20, t=10, b=20), xaxis_title=None)
+            fig_trend.update_layout(template="plotly_white", height=380, xaxis_title=None, margin=dict(l=20, r=20, t=20, b=20))
             if metric_mode == "금액 (Revenue)": fig_trend.update_yaxes(tickformat=".2s")
             st.plotly_chart(fig_trend, use_container_width=True)
-        else:
-            st.info("데이터가 부족하여 트렌드를 표시할 수 없습니다.")
-
-    with c2:
-        st.markdown("##### 🌐 본부/지사 비중")
+            
+    with r1_c2:
+        st.markdown("##### 🌐 본부 포트폴리오")
         if not df_filtered.empty:
             fig_sun = px.sunburst(df_filtered, path=['본부', '지사'], values=VAL_COL, color='본부', color_discrete_sequence=px.colors.qualitative.Prism)
-            fig_sun.update_layout(height=380, margin=dict(l=0, r=0, t=10, b=10))
+            fig_sun.update_layout(height=380, margin=dict(l=10, r=10, t=20, b=20))
             st.plotly_chart(fig_sun, use_container_width=True)
-
-    st.markdown("##### 🏢 본부별 효율성 (Pareto Chart)")
+            
+    st.markdown("##### 🏢 본부별 효율성 (Pareto)")
     hq_stats = df_filtered.groupby('본부').agg({'계약번호': 'count', '월정료(VAT미포함)': 'sum'}).reset_index().sort_values('계약번호', ascending=False)
-    
     fig_dual = make_subplots(specs=[[{"secondary_y": True}]])
-    fig_dual.add_trace(go.Bar(x=hq_stats['본부'], y=hq_stats['계약번호'], name="건수", marker_color='#3b82f6', opacity=0.8), secondary_y=False)
+    fig_dual.add_trace(go.Bar(x=hq_stats['본부'], y=hq_stats['계약번호'], name="건수", marker_color='#3b82f6', opacity=0.8, marker_line_width=0), secondary_y=False)
     fig_dual.add_trace(go.Scatter(x=hq_stats['본부'], y=hq_stats['월정료(VAT미포함)'], name="금액", mode='lines+markers', line=dict(color='#ef4444', width=3)), secondary_y=True)
-    fig_dual.update_layout(template="plotly_white", height=350, legend=dict(orientation="h", y=1.1))
+    fig_dual.update_layout(template="plotly_white", height=400, hovermode="x unified", legend=dict(orientation="h", y=1.1), margin=dict(l=20, r=20, t=40, b=20))
     st.plotly_chart(fig_dual, use_container_width=True)
 
 # [TAB 2] Operations
 with tab_ops:
-    # Controls
-    cat_opts = ["정지,설변구분", "실적채널", "L형/i형", "출동/영상"]
-    # Check if columns exist
-    valid_opts = [c for c in cat_opts if c in df_filtered.columns]
-    
+    st.markdown("#### 🚦 다차원 상세 분석")
     try:
-        sub_mode = st.pills("분석 항목 선택", valid_opts, default=valid_opts[0] if valid_opts else None, selection_mode="single")
+        sub_mode = st.pills("상세 항목", ["실적채널", "L형/i형", "출동/영상", "정지,설변구분"], default="정지,설변구분", selection_mode="single")
     except:
-        sub_mode = st.selectbox("분석 항목 선택", valid_opts)
+        sub_mode = st.radio("상세 항목", ["실적채널", "L형/i형", "출동/영상", "정지,설변구분"], horizontal=True)
+    if not sub_mode: sub_mode = "정지,설변구분"
 
-    if sub_mode:
-        c1, c2 = st.columns([1, 2])
-        agg_df = df_filtered.groupby(sub_mode)[VAL_COL].agg(AGG_FUNC).reset_index().rename(columns={VAL_COL: 'Value'})
-        
-        with c1:
-            fig_pie = px.pie(agg_df, values='Value', names=sub_mode, hole=0.5, color_discrete_sequence=px.colors.qualitative.Safe)
+    c_dyn1, c_dyn2 = st.columns([1, 2])
+    with c_dyn1:
+        if sub_mode in df_filtered.columns:
+            mode_data = df_filtered.groupby(sub_mode)[VAL_COL].agg(AGG_FUNC).reset_index()
+            mode_data.columns = ['구분', '값']
+            fig_pie = px.pie(mode_data, values='값', names='구분', hole=0.6, color_discrete_sequence=px.colors.qualitative.Safe)
             fig_pie.update_traces(textinfo='percent+label', textposition='inside')
-            fig_pie.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0), height=300)
+            fig_pie.update_layout(showlegend=False, margin=dict(t=20, b=20, l=20, r=20))
             st.plotly_chart(fig_pie, use_container_width=True)
-        
-        with c2:
-            agg_df = agg_df.sort_values('Value')
-            fig_bar = create_bar_chart(agg_df, x='Value', y=sub_mode, orientation='h', text='Value', height=300)
-            fig_bar.update_traces(texttemplate=TEXT_TEMPLATE, textposition='outside')
+    with c_dyn2:
+        if sub_mode in df_filtered.columns:
+            mode_data = df_filtered.groupby(sub_mode)[VAL_COL].agg(AGG_FUNC).reset_index()
+            mode_data.columns = ['구분', '값']
+            mode_data = mode_data.sort_values('값', ascending=True)
+            fig_bar = px.bar(mode_data, x='값', y='구분', orientation='h', text='값', color='구분', title=f"{sub_mode}별 현황")
+            fig_bar.update_layout(showlegend=False, template="plotly_white", xaxis_visible=False, margin=dict(l=10, r=10, t=40, b=10))
+            fig_bar.update_traces(texttemplate='%{text:,.0f}' if metric_mode=="건수 (Volume)" else '%{text:.2s}', textposition='outside', marker_line_width=0)
             st.plotly_chart(fig_bar, use_container_width=True)
 
     st.markdown("---")
     
-    # Detailed Breakdowns
-    with st.expander("📊 상세 분석 (본부/지사/담당자)", expanded=True):
-        t1, t2 = st.tabs(["본부별", "담당자 Top 20"])
-        
-        with t1:
-            hq_brk = df_filtered.groupby(['본부', '정지,설변구분'])[VAL_COL].agg(AGG_FUNC).reset_index()
-            fig_hq = create_bar_chart(hq_brk, x='본부', y=VAL_COL, color='정지,설변구분', text=VAL_COL, title="본부별 현황")
-            fig_hq.update_traces(texttemplate=TEXT_TEMPLATE)
-            st.plotly_chart(fig_hq, use_container_width=True)
-            
-        with t2:
-            mgr_brk = df_filtered.groupby(['구역담당영업사원', '정지,설변구분'])[VAL_COL].agg(AGG_FUNC).reset_index()
-            top_mgrs = mgr_brk.groupby('구역담당영업사원')[VAL_COL].sum().sort_values(ascending=False).head(20).index
-            mgr_top = mgr_brk[mgr_brk['구역담당영업사원'].isin(top_mgrs)]
-            
-            fig_mgr = create_bar_chart(mgr_top, x=VAL_COL, y='구역담당영업사원', color='정지,설변구분', orientation='h', title="상위 담당자 Top 20", height=600)
-            fig_mgr.update_layout(yaxis={'categoryorder':'total ascending'})
-            st.plotly_chart(fig_mgr, use_container_width=True)
+    with st.expander("🏢 본부별 현황 (Click to Expand)", expanded=True):
+        hq_brk = df_filtered.groupby(['본부', '정지,설변구분'])[VAL_COL].agg(AGG_FUNC).reset_index()
+        hq_brk.columns = ['본부', '구분', '값']
+        fig_hq = px.bar(hq_brk, x='본부', y='값', color='구분', barmode='group', text='값', color_discrete_sequence=['#ef4444', '#3b82f6'])
+        fig_hq.update_layout(template="plotly_white", margin=dict(t=20, b=20), legend=dict(orientation="h", y=1.1))
+        fig_hq.update_traces(texttemplate='%{text:,.0f}' if metric_mode=="건수 (Volume)" else '%{text:.2s}', textposition='outside')
+        st.plotly_chart(fig_hq, use_container_width=True)
 
-# [TAB 3] Data Grid (Optimized)
+    with st.expander("📍 지사별 현황 (Click to Expand)", expanded=False):
+        br_brk = df_filtered.groupby(['지사', '정지,설변구분'])[VAL_COL].agg(AGG_FUNC).reset_index()
+        br_brk.columns = ['지사', '구분', '값']
+        fig_br = px.bar(br_brk, x='지사', y='값', color='구분', barmode='stack')
+        fig_br.update_layout(template="plotly_white", margin=dict(t=20, b=20))
+        st.plotly_chart(fig_br, use_container_width=True)
+
+    with st.expander("👤 담당자별 Top 20 (Click to Expand)", expanded=False):
+        mgr_brk = df_filtered.groupby(['구역담당영업사원', '정지,설변구분'])[VAL_COL].agg(AGG_FUNC).reset_index()
+        mgr_brk.columns = ['담당자', '구분', '값']
+        top_list = mgr_brk.groupby('담당자')['값'].sum().sort_values(ascending=False).head(20).index
+        mgr_top = mgr_brk[mgr_brk['담당자'].isin(top_list)]
+        fig_mgr = px.bar(mgr_top, x='값', y='담당자', color='구분', orientation='h')
+        fig_mgr.update_layout(yaxis={'categoryorder':'total ascending'}, template="plotly_white", margin=dict(t=20, b=20))
+        st.plotly_chart(fig_mgr, use_container_width=True)
+
+    st.markdown("---")
+    
+    c_m1, c_m2 = st.columns(2)
+    def extract_num(s):
+        nums = re.findall(r'\d+', str(s))
+        return int(nums[0]) if nums else 0
+
+    with c_m1:
+        st.markdown("##### ⏱️ 정지일수 구간")
+        if '당월말_정지일수_구간' in df_filtered.columns:
+            s_data = df_filtered.groupby('당월말_정지일수_구간')[VAL_COL].agg(AGG_FUNC).reset_index()
+            s_data.columns = ['구간', '값']
+            s_data['sort'] = s_data['구간'].apply(extract_num)
+            s_data = s_data.sort_values('sort')
+            fig_s = px.bar(s_data, x='값', y='구간', orientation='h', text='값', color='값', color_continuous_scale='Reds')
+            fig_s.update_layout(template="plotly_white", xaxis_visible=False)
+            fig_s.update_traces(texttemplate='%{text:,.0f}' if metric_mode=="건수 (Volume)" else '%{text:.2s}', textposition='outside')
+            st.plotly_chart(fig_s, use_container_width=True)
+
+    with c_m2:
+        st.markdown("##### 💰 월정료 가격대")
+        if '월정료 구간' in df_filtered.columns:
+            p_data = df_filtered.groupby('월정료 구간')[VAL_COL].agg(AGG_FUNC).reset_index()
+            p_data.columns = ['구간', '값']
+            p_data['sort'] = p_data['구간'].apply(extract_num)
+            p_data = p_data.sort_values('sort')
+            fig_p = px.bar(p_data, x='구간', y='값', text='값', color='값', color_continuous_scale='Blues')
+            fig_p.update_layout(template="plotly_white", yaxis_visible=False)
+            fig_p.update_traces(texttemplate='%{text:,.0f}' if metric_mode=="건수 (Volume)" else '%{text:.2s}', textposition='outside')
+            st.plotly_chart(fig_p, use_container_width=True)
+
+# [TAB 3] Data Grid
 with tab_data:
-    st.markdown("### 💾 Intelligent Data Grid")
+    st.subheader("💾 Intelligent Data Grid")
     
-    # Secure Download Logic
-    c_pw, c_btn = st.columns([1, 4])
-    pwd = c_pw.text_input("Access Code", type="password", placeholder="****", label_visibility="collapsed")
+    # Secure Download
+    c_pw, c_btn = st.columns([1, 3])
+    pwd = c_pw.text_input("다운로드 비밀번호", type="password", placeholder="****")
+    if pwd == "3867":
+        c_btn.success("✅ 인증 완료")
+        c_btn.download_button("📥 전체 데이터 다운로드 (CSV)", df_filtered.to_csv(index=False).encode('utf-8-sig'), 'ktt_data.csv', 'text/csv')
     
-    if pwd == "3867": # Note: Use st.secrets in production
-        csv_data = df_filtered.to_csv(index=False).encode('utf-8-sig')
-        c_btn.download_button("📥 Excel/CSV 다운로드", csv_data, 'ktt_analytics_export.csv', 'text/csv', type="primary")
-    else:
-        c_btn.button("🔒 다운로드 잠김", disabled=True)
+    st.markdown("---")
+    
+    # Table
+    d_cols = ['본부', '지사', '구역담당영업사원', 'Period', '고객번호', '상호', '월정료(VAT미포함)', '실적채널', '정지,설변구분', '부실구분', 'KPI_Status']
+    v_cols = [c for c in d_cols if c in df_filtered.columns]
+    
+    def style_row(row):
+        status = str(row.get('정지,설변구분', ''))
+        kpi = str(row.get('KPI_Status', ''))
+        if '정지' in status: return ['background-color: #fee2e2; color: #b91c1c'] * len(row)
+        elif '대상' in kpi: return ['background-color: #e0e7ff; color: #3730a3; font-weight: bold'] * len(row)
+        return [''] * len(row)
 
-    # Performance Optimized Dataframe
-    # Warning: Using style.apply on large datasets causes severe lag. 
-    # Solution: Use st.column_config for formatting and highlighting.
-    
-    display_cols = ['본부', '지사', '구역담당영업사원', 'Period', '고객번호', '상호', '월정료(VAT미포함)', '실적채널', '정지,설변구분', 'KPI_Status']
-    valid_disp_cols = [c for c in display_cols if c in df_filtered.columns]
-    
     st.dataframe(
-        df_filtered[valid_disp_cols],
+        df_filtered[v_cols].style.apply(style_row, axis=1),
         use_container_width=True,
-        hide_index=True,
         height=600,
-        column_config={
-            "월정료(VAT미포함)": st.column_config.NumberColumn(
-                "월정료",
-                format="₩%d",
-            ),
-            "KPI_Status": st.column_config.TextColumn(
-                "KPI 상태",
-                help="대상인 경우 붉은색 표시",
-                validate="^대상$" # Highlights if regex matches, but visual cues are limited in basic config
-            ),
-            "정지,설변구분": st.column_config.Column(
-                "구분",
-                width="small"
-            )
-        }
+        column_config={"월정료(VAT미포함)": st.column_config.NumberColumn("월정료", format="₩%d")}
     )
-    st.caption("ℹ️ 성능 최적화를 위해 전체 행 스타일링 대신 네이티브 그리드를 사용합니다.")
