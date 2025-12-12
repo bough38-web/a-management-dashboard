@@ -97,7 +97,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 2. Data Loading & Logic (Enhanced)
+# 2. Data Loading & Logic
 # -----------------------------------------------------------------------------
 @st.cache_data
 def load_enterprise_data():
@@ -109,14 +109,13 @@ def load_enterprise_data():
         return pd.DataFrame()
 
     # [중요] 컬럼명 정리 및 매핑
-    # 조회구분을 '정지,설변구분'으로 사용 (사용자 요청 반영)
     if '조회구분' in df.columns:
         df['정지,설변구분'] = df['조회구분']
     
-    # KPI 컬럼 자동 탐지 (10월말, 11월말, 12월말 등 유동적 대응)
+    # KPI 컬럼 자동 탐지
     kpi_cols = [c for c in df.columns if 'KPI차감' in c]
     if kpi_cols:
-        df['KPI_Status'] = df[kpi_cols[0]] # 첫 번째 KPI 컬럼을 대표로 사용
+        df['KPI_Status'] = df[kpi_cols[0]]
     else:
         df['KPI_Status'] = '-'
 
@@ -137,7 +136,6 @@ def load_enterprise_data():
     
     # 수치 변환 (쉼표 제거 포함)
     if '월정료(VAT미포함)' in df.columns:
-        # 문자열로 변환 -> 쉼표 제거 -> 숫자로 변환
         df['월정료(VAT미포함)'] = df['월정료(VAT미포함)'].astype(str).str.replace(',', '').apply(pd.to_numeric, errors='coerce').fillna(0)
     
     numeric_cols = ['계약번호', '당월말_정지일수']
@@ -207,7 +205,7 @@ with st.container():
             selected_branch = st.multiselect("Branch", valid_branches, default=valid_branches)
     if not selected_branch: selected_branch = valid_branches
 
-    # 3. 담당자 (Dropdown) & 추가 필터
+    # 3. 담당자 (Pills / Multiselect Hybrid) - 지사처럼 UI 적용
     st.markdown("---")
     valid_managers = sorted(df[
         (df['본부'].isin(selected_hq)) & 
@@ -218,23 +216,29 @@ with st.container():
         valid_managers.remove("미지정")
         valid_managers.append("미지정")
 
-    col_mgr, col_opt = st.columns([2, 1])
+    st.markdown(f"##### 👤 담당자 선택 <span style='color:#64748b; font-size:0.9em'>({len(valid_managers)}명)</span>", unsafe_allow_html=True)
     
-    with col_mgr:
-        st.markdown(f"##### 👤 담당자 선택 <span style='color:#64748b; font-size:0.9em'>({len(valid_managers)}명)</span>", unsafe_allow_html=True)
-        selected_managers = st.multiselect(
-            "담당자 검색 및 선택", 
-            valid_managers, 
-            default=valid_managers,
-            placeholder="담당자를 선택하세요 (여러 명 가능)"
-        )
-        if not selected_managers: selected_managers = valid_managers
+    # [NEW] 담당자 선택 UI를 지사 선택과 동일하게 구현
+    if len(valid_managers) > 30:
+        with st.expander(f"🔽 전체 담당자 목록 보기 ({len(valid_managers)}명)", expanded=False):
+            try:
+                selected_managers = st.pills("Manager", valid_managers, selection_mode="multi", default=valid_managers, key="mgr_pills_full", label_visibility="collapsed")
+            except AttributeError:
+                selected_managers = st.multiselect("담당자 검색", valid_managers, default=valid_managers)
+    else:
+        try:
+            selected_managers = st.pills("Manager", valid_managers, selection_mode="multi", default=valid_managers, key="mgr_pills_lite", label_visibility="collapsed")
+        except AttributeError:
+            selected_managers = st.multiselect("담당자 검색", valid_managers, default=valid_managers)
+            
+    if not selected_managers: selected_managers = valid_managers
 
-    with col_opt:
-        st.markdown("##### ⚙️ 옵션 필터")
-        c_t1, c_t2 = st.columns(2)
-        with c_t1: kpi_target = st.toggle("KPI 차감 '대상'만", False)
-        with c_t2: arrears_only = st.toggle("체납 건만", False)
+    # 4. 추가 필터
+    st.markdown("---")
+    st.markdown("##### ⚙️ 옵션 필터")
+    c_t1, c_t2 = st.columns(2)
+    with c_t1: kpi_target = st.toggle("KPI 차감 '대상'만", False)
+    with c_t2: arrears_only = st.toggle("체납 건만", False)
         
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -249,22 +253,31 @@ if arrears_only: mask = mask & (df['체납'] != '-') & (df['체납'] != 'Unclass
 df_filtered = df[mask]
 
 # -----------------------------------------------------------------------------
-# 4. KPI Summary
+# 4. KPI Summary (Executive Summary 분리)
 # -----------------------------------------------------------------------------
-st.markdown("### 🚀 Executive Summary")
+st.markdown("### 🚀 Executive Summary (정지 vs 설변)")
 k1, k2, k3, k4 = st.columns(4)
-
-tot_vol = len(df_filtered)
-tot_rev = df_filtered['월정료(VAT미포함)'].sum()
-avg_susp = df_filtered['당월말_정지일수'].mean() if '당월말_정지일수' in df.columns else 0
-risk_cnt = len(df_filtered[df_filtered['정지,설변구분'].str.contains('정지', na=False)])
 
 def fmt_money(val): return f"₩{val/10000:,.0f} 만"
 
-k1.metric("총 계약 건수", f"{tot_vol:,.0f} 건", "Selected Scope")
-k2.metric("총 월정료 (예상)", fmt_money(tot_rev), "Monthly Revenue")
-k3.metric("평균 정지일수", f"{avg_susp:.1f} 일", "Avg Duration")
-k4.metric("Risk Alert (정지)", f"{risk_cnt:,.0f} 건", f"Rate: {risk_cnt/tot_vol*100:.1f}%" if tot_vol>0 else "0%", delta_color="inverse")
+# 정지 데이터 집계
+susp_df = df_filtered[df_filtered['정지,설변구분'] == '정지']
+susp_cnt = len(susp_df)
+susp_rev = susp_df['월정료(VAT미포함)'].sum()
+
+# 설변 데이터 집계
+chg_df = df_filtered[df_filtered['정지,설변구분'] == '설변']
+chg_cnt = len(chg_df)
+chg_rev = chg_df['월정료(VAT미포함)'].sum()
+
+# [NEW] KPI 카드를 정지와 설변으로 명확히 분리
+k1.metric("⛔ 정지 건수", f"{susp_cnt:,.0f} 건", "Suspension Count")
+k2.metric("⛔ 정지 월정료", fmt_money(susp_rev), "Suspension Revenue", delta_color="inverse")
+k3.metric("🔄 설변 건수", f"{chg_cnt:,.0f} 건", "Change Count")
+k4.metric("🔄 설변 월정료", fmt_money(chg_rev), "Change Revenue")
+
+# 전체 합계 정보는 하단에 작게 표시하거나 별도 영역에 배치
+st.caption(f"**전체 합계 (Total):** {len(df_filtered):,.0f} 건 | {fmt_money(df_filtered['월정료(VAT미포함)'].sum())}")
 
 st.markdown("---")
 
