@@ -206,11 +206,11 @@ with st.sidebar:
     st.markdown("### 🎛️ Control Panel")
     
     # 1. 파일 업로드 (HTML 스타일)
-    with st.container():
-        st.caption("📁 데이터 파일 업로드 (.csv)")
-        uploaded_file = st.file_uploader("Upload CSV", type="csv", label_visibility="collapsed")
-        if uploaded_file:
-            st.success("File Uploaded!")
+    #with st.container():
+       # st.caption("📁 데이터 파일 업로드 (.csv)")
+       # uploaded_file = st.file_uploader("Upload CSV", type="csv", label_visibility="collapsed")
+       # if uploaded_file:
+       #     st.success("File Uploaded!")
             # 실제로는 여기서 df를 다시 로드하는 로직 필요
             
     st.markdown("---")
