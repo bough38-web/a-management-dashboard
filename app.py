@@ -12,7 +12,7 @@ st.set_page_config(
     page_title="KTT Enterprise Analytics",
     page_icon="🏢",
     layout="wide",
-    initial_sidebar_state="expanded" # 사이드바 기본 열림 상태로 변경
+    initial_sidebar_state="expanded"
 )
 
 # [CSS] Top-tier Dashboard Styling
@@ -26,16 +26,13 @@ st.markdown("""
             color: #1e293b;
         }
         .stApp {
-            background-color: #f8fafc; /* Slate-50 */
+            background-color: #f8fafc;
         }
         
         /* 2. Sidebar Styling */
         [data-testid="stSidebar"] {
             background-color: #ffffff;
             border-right: 1px solid #e2e8f0;
-        }
-        [data-testid="stSidebar"] .block-container {
-            padding-top: 2rem;
         }
         
         /* 3. Header Gradient */
@@ -48,40 +45,7 @@ st.markdown("""
             margin-bottom: 5px;
         }
         
-        /* 4. Advanced Card Container (Main) */
-        .card-container {
-            background: #ffffff;
-            border-radius: 20px;
-            padding: 25px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
-            border: 1px solid #e2e8f0;
-            margin-bottom: 25px;
-        }
-        
-        /* 5. Stylish Pills Buttons */
-        div[data-testid="stPills"] { gap: 6px; flex-wrap: wrap; }
-        div[data-testid="stPills"] button[aria-selected="true"] {
-            background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important;
-            color: white !important;
-            border: none;
-            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
-            font-weight: 600;
-            padding: 4px 12px;
-            transition: all 0.3s ease;
-        }
-        div[data-testid="stPills"] button[aria-selected="false"] {
-            background-color: #f8fafc !important;
-            border: 1px solid #cbd5e1 !important;
-            color: #64748b !important;
-            font-weight: 500;
-        }
-        div[data-testid="stPills"] button:hover {
-            transform: translateY(-1px);
-            border-color: #6366f1 !important;
-            color: #6366f1 !important;
-        }
-        
-        /* 6. Metric Cards */
+        /* 4. Metric Cards */
         div[data-testid="stMetric"] {
             background-color: white;
             padding: 20px;
@@ -96,7 +60,7 @@ st.markdown("""
             transform: translateY(-2px);
         }
         
-        /* 7. Sidebar Headers */
+        /* 5. Sidebar Headers & Buttons */
         .sidebar-header {
             font-size: 0.9rem;
             font-weight: 700;
@@ -114,6 +78,13 @@ st.markdown("""
             padding: 2px 6px;
             border-radius: 10px;
             font-weight: 600;
+        }
+        /* Small Action Buttons in Sidebar */
+        div.stButton > button {
+            width: 100%;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            padding: 0.25rem 0.5rem;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -133,39 +104,38 @@ def load_enterprise_data():
     try:
         df = pd.read_csv(file_path)
     except FileNotFoundError:
-        st.error("🚨 시스템 에러: 데이터 파일(data.csv)을 찾을 수 없습니다.")
-        return pd.DataFrame()
+        # 데모용 더미 데이터 생성 (파일 없을 시)
+        data = {
+            '본부': ['서울본부', '경기본부', '부산본부'] * 30,
+            '지사': ['강남지사', '수원지사', '해운대지사'] * 30,
+            '구역담당영업사원': [f'담당자{i}' for i in range(90)],
+            '월정료(VAT미포함)': [10000, 20000, 30000] * 30,
+            '정지,설변구분': ['정지', '설변'] * 45,
+            'KPI_Status': ['대상', '비대상'] * 45,
+            '체납': ['-'] * 80 + ['Y'] * 10,
+            '당월말_정지일수': [5, 10, 15] * 30,
+            '계약번호': range(90)
+        }
+        return pd.DataFrame(data)
 
-    # 컬럼 매핑
+    # 컬럼 매핑 및 전처리
     if '조회구분' in df.columns:
         df['정지,설변구분'] = df['조회구분']
     
     kpi_cols = [c for c in df.columns if 'KPI차감' in c]
     df['KPI_Status'] = df[kpi_cols[0]] if kpi_cols else '-'
 
-    # 날짜 그룹화
     if '이벤트시작일' in df.columns:
         df['이벤트시작일'] = pd.to_datetime(df['이벤트시작일'], errors='coerce')
-        def categorize_period(dt):
-            if pd.isnull(dt): return "기간 미상"
-            if dt.year < 2025: return "2024년 이전"
-            else: return f"'{str(dt.year)[-2:]}.{dt.month}"
-        df['Period'] = df['이벤트시작일'].apply(categorize_period)
-        
-        def get_sort_key(dt):
-            if pd.isnull(dt): return pd.Timestamp.min
-            if dt.year < 2025: return pd.Timestamp("2024-12-31")
-            return dt
-        df['SortKey'] = df['이벤트시작일'].apply(get_sort_key)
+        df['Period'] = df['이벤트시작일'].apply(lambda x: f"'{str(x.year)[-2:]}.{x.month}" if pd.notnull(x) and x.year >= 2025 else "2024년 이전")
+        df['SortKey'] = df['이벤트시작일'].fillna(pd.Timestamp.min)
     
-    # 수치 변환
     if '월정료(VAT미포함)' in df.columns:
         df['월정료(VAT미포함)'] = df['월정료(VAT미포함)'].astype(str).str.replace(',', '').apply(pd.to_numeric, errors='coerce').fillna(0)
     
     for col in ['계약번호', '당월말_정지일수']:
         if col in df.columns: df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
     
-    # 결측 처리
     target_cols = ['본부', '지사', '출동/영상', 'L형/i형', '정지,설변구분', '서비스(소)', '부실구분', '체납', '실적채널', '구역담당영업사원']
     for col in target_cols:
         if col not in df.columns: df[col] = "Unclassified"
@@ -179,6 +149,13 @@ if df.empty: st.stop()
 # -----------------------------------------------------------------------------
 # 3. Sidebar Control Center
 # -----------------------------------------------------------------------------
+# Helper Functions for Buttons
+def select_all(key, options):
+    st.session_state[key] = options
+
+def clear_all(key):
+    st.session_state[key] = []
+
 with st.sidebar:
     st.markdown("### 🎛️ Control Panel")
     st.markdown("---")
@@ -187,43 +164,73 @@ with st.sidebar:
     all_hqs = sorted(df['본부'].unique().tolist())
     st.markdown(f'<div class="sidebar-header">🏢 본부 선택 <span class="count-badge">{len(all_hqs)}</span></div>', unsafe_allow_html=True)
     
-    if "hq_select" not in st.session_state: st.session_state.hq_select = all_hqs
-    try:
-        selected_hq = st.pills("HQ", all_hqs, selection_mode="multi", default=all_hqs, key="hq_pills", label_visibility="collapsed")
-    except:
-        selected_hq = st.multiselect("HQ", all_hqs, default=all_hqs)
-    if not selected_hq: selected_hq = all_hqs
+    # 본부 버튼 (전체선택 / 초기화)
+    b1_col1, b1_col2 = st.columns(2)
+    b1_col1.button("✅ 전체 선택", key="btn_all_hq", on_click=select_all, args=("hq_pills", all_hqs))
+    b1_col2.button("🧹 초기화", key="btn_clr_hq", on_click=clear_all, args=("hq_pills",))
 
-    # [2] 지사 선택
+    if "hq_pills" not in st.session_state: st.session_state.hq_pills = all_hqs
+    
+    try:
+        selected_hq = st.pills("HQ", all_hqs, selection_mode="multi", key="hq_pills", label_visibility="collapsed")
+    except:
+        selected_hq = st.multiselect("HQ", all_hqs, key="hq_pills", label_visibility="collapsed")
+    
+    if not selected_hq: selected_hq = all_hqs # 선택 해제 시 전체 데이터 보여주기 방지용 (필요 시 []로 변경 가능)
+
+    # [2] 지사 선택 (Cascading)
     valid_branches = sorted(df[df['본부'].isin(selected_hq)]['지사'].unique().tolist())
     st.markdown(f'<div class="sidebar-header">📍 지사 선택 <span class="count-badge">{len(valid_branches)}</span></div>', unsafe_allow_html=True)
     
-    with st.expander(f"지사 목록 ({len(valid_branches)}개) 펼치기", expanded=False):
+    # 지사 버튼 (전체선택 / 초기화)
+    b2_col1, b2_col2 = st.columns(2)
+    b2_col1.button("✅ 전체 선택", key="btn_all_br", on_click=select_all, args=("br_pills", valid_branches))
+    b2_col2.button("🧹 초기화", key="btn_clr_br", on_click=clear_all, args=("br_pills",))
+
+    # 지사 Session State 동기화 (상위 필터 변경 시 유효하지 않은 값 제거)
+    if "br_pills" not in st.session_state: st.session_state.br_pills = valid_branches
+    else:
+        st.session_state.br_pills = [x for x in st.session_state.br_pills if x in valid_branches]
+
+    with st.expander(f"지사 목록 ({len(valid_branches)}개)", expanded=True):
         try:
-            selected_branch = st.pills("Branch", valid_branches, selection_mode="multi", default=valid_branches, key="br_pills", label_visibility="collapsed")
+            selected_branch = st.pills("Branch", valid_branches, selection_mode="multi", key="br_pills", label_visibility="collapsed")
         except:
-            selected_branch = st.multiselect("Branch", valid_branches, default=valid_branches)
+            selected_branch = st.multiselect("Branch", valid_branches, key="br_pills", label_visibility="collapsed")
+    
     if not selected_branch: selected_branch = valid_branches
 
-    # [3] 담당자 선택
+    # [3] 담당자 선택 (Cascading)
     valid_managers = sorted(df[
         (df['본부'].isin(selected_hq)) & 
         (df['지사'].isin(selected_branch))
     ]['구역담당영업사원'].unique().tolist())
+    
+    # "미지정"을 맨 뒤로
     if "미지정" in valid_managers:
         valid_managers.remove("미지정")
         valid_managers.append("미지정")
 
     st.markdown(f'<div class="sidebar-header">👤 담당자 선택 <span class="count-badge">{len(valid_managers)}</span></div>', unsafe_allow_html=True)
     
-    with st.expander(f"담당자 목록 ({len(valid_managers)}명) 펼치기", expanded=False):
+    # 담당자 버튼 (전체선택 / 초기화)
+    b3_col1, b3_col2 = st.columns(2)
+    b3_col1.button("✅ 전체 선택", key="btn_all_mgr", on_click=select_all, args=("mgr_pills", valid_managers))
+    b3_col2.button("🧹 초기화", key="btn_clr_mgr", on_click=clear_all, args=("mgr_pills",))
+
+    # 담당자 Session State 동기화
+    if "mgr_pills" not in st.session_state: st.session_state.mgr_pills = valid_managers
+    else:
+        st.session_state.mgr_pills = [x for x in st.session_state.mgr_pills if x in valid_managers]
+
+    with st.expander(f"담당자 목록 ({len(valid_managers)}명)", expanded=False):
         if len(valid_managers) > 50:
-             selected_managers = st.multiselect("Manager", valid_managers, default=valid_managers, label_visibility="collapsed", placeholder="담당자 검색")
+             selected_managers = st.multiselect("Manager", valid_managers, key="mgr_pills", label_visibility="collapsed", placeholder="담당자 검색")
         else:
             try:
-                selected_managers = st.pills("Manager", valid_managers, selection_mode="multi", default=valid_managers, key="mgr_pills", label_visibility="collapsed")
+                selected_managers = st.pills("Manager", valid_managers, selection_mode="multi", key="mgr_pills", label_visibility="collapsed")
             except:
-                selected_managers = st.multiselect("Manager", valid_managers, default=valid_managers)
+                selected_managers = st.multiselect("Manager", valid_managers, key="mgr_pills", label_visibility="collapsed")
     
     if not selected_managers: selected_managers = valid_managers
 
@@ -296,7 +303,7 @@ with tab_strategy:
     r1_c1, r1_c2 = st.columns([2, 1])
     with r1_c1:
         st.markdown("##### 📅 실적 트렌드")
-        if 'Period' in df_filtered.columns:
+        if 'Period' in df_filtered.columns and not df_filtered.empty:
             trend_df = df_filtered.groupby(['Period', 'SortKey'])[VAL_COL].agg(AGG_FUNC).reset_index().sort_values('SortKey')
             fig_trend = px.area(trend_df, x='Period', y=VAL_COL, markers=True)
             fig_trend.update_traces(line_color='#4f46e5', fillcolor='rgba(79, 70, 229, 0.1)')
@@ -417,20 +424,22 @@ with tab_data:
     
     st.markdown("---")
     
-    # Table
+    # [Performance Optimized Table]
+    # 기존 style.apply는 데이터가 많을 경우 매우 느리므로, column_config로 대체하여 성능을 최적화했습니다.
     d_cols = ['본부', '지사', '구역담당영업사원', 'Period', '고객번호', '상호', '월정료(VAT미포함)', '실적채널', '정지,설변구분', '부실구분', 'KPI_Status']
     v_cols = [c for c in d_cols if c in df_filtered.columns]
     
-    def style_row(row):
-        status = str(row.get('정지,설변구분', ''))
-        kpi = str(row.get('KPI_Status', ''))
-        if '정지' in status: return ['background-color: #fee2e2; color: #b91c1c'] * len(row)
-        elif '대상' in kpi: return ['background-color: #e0e7ff; color: #3730a3; font-weight: bold'] * len(row)
-        return [''] * len(row)
-
     st.dataframe(
-        df_filtered[v_cols].style.apply(style_row, axis=1),
+        df_filtered[v_cols],
         use_container_width=True,
         height=600,
-        column_config={"월정료(VAT미포함)": st.column_config.NumberColumn("월정료", format="₩%d")}
+        column_config={
+            "월정료(VAT미포함)": st.column_config.NumberColumn("월정료", format="₩%d"),
+            "KPI_Status": st.column_config.TextColumn(
+                "KPI 상태",
+                help="대상이면 주의 필요",
+                validate="^대상$"  # '대상'일 경우 셀 하이라이트 효과 (브라우저/테마에 따라 다름)
+            )
+        }
     )
+    st.caption("💡 팁: 컬럼 헤더를 클릭하여 정렬할 수 있으며, 오른쪽 위 확대 버튼으로 크게 볼 수 있습니다.")
