@@ -97,7 +97,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
-# 2. Data Loading & Logic
+# 2. Data Loading & Logic (Enhanced)
 # -----------------------------------------------------------------------------
 @st.cache_data
 def load_enterprise_data():
@@ -107,6 +107,18 @@ def load_enterprise_data():
     except FileNotFoundError:
         st.error("🚨 시스템 에러: 데이터 파일(data.csv)을 찾을 수 없습니다.")
         return pd.DataFrame()
+
+    # [중요] 컬럼명 정리 및 매핑
+    # 조회구분을 '정지,설변구분'으로 사용 (사용자 요청 반영)
+    if '조회구분' in df.columns:
+        df['정지,설변구분'] = df['조회구분']
+    
+    # KPI 컬럼 자동 탐지 (10월말, 11월말, 12월말 등 유동적 대응)
+    kpi_cols = [c for c in df.columns if 'KPI차감' in c]
+    if kpi_cols:
+        df['KPI_Status'] = df[kpi_cols[0]] # 첫 번째 KPI 컬럼을 대표로 사용
+    else:
+        df['KPI_Status'] = '-'
 
     # 날짜 그룹화
     if '이벤트시작일' in df.columns:
@@ -123,8 +135,12 @@ def load_enterprise_data():
             return dt
         df['SortKey'] = df['이벤트시작일'].apply(get_sort_key)
     
-    # 수치 변환
-    numeric_cols = ['월정료(VAT미포함)', '계약번호', '당월말_정지일수']
+    # 수치 변환 (쉼표 제거 포함)
+    if '월정료(VAT미포함)' in df.columns:
+        # 문자열로 변환 -> 쉼표 제거 -> 숫자로 변환
+        df['월정료(VAT미포함)'] = df['월정료(VAT미포함)'].astype(str).str.replace(',', '').apply(pd.to_numeric, errors='coerce').fillna(0)
+    
+    numeric_cols = ['계약번호', '당월말_정지일수']
     for col in numeric_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
@@ -132,7 +148,7 @@ def load_enterprise_data():
     # 결측 처리
     fill_cols = [
         '본부', '지사', '출동/영상', 'L형/i형', '정지,설변구분', 
-        '서비스(소)', '부실구분', 'KPI차감 10월말', '체납', 
+        '서비스(소)', '부실구분', 'KPI_Status', '체납', 
         '당월말_정지일수_구간', '월정료 구간', '실적채널', '구역담당영업사원'
     ]
     for col in fill_cols:
@@ -150,7 +166,6 @@ if df.empty:
 # -----------------------------------------------------------------------------
 # 3. Header & Dynamic Filters
 # -----------------------------------------------------------------------------
-# [수정됨] 헤더 영역을 컨테이너로 감싸 가시성 확보
 with st.container():
     c_head1, c_head2 = st.columns([3, 1])
     with c_head1:
@@ -174,7 +189,7 @@ with st.container():
         selected_hq = st.multiselect("HQ", all_hqs, default=all_hqs)
     if not selected_hq: selected_hq = all_hqs
 
-    # 2. 지사 (Pills) - 본부 선택에 따라 동적 변경
+    # 2. 지사 (Pills)
     st.markdown("---")
     valid_branches = sorted(df[df['본부'].isin(selected_hq)]['지사'].unique().tolist())
     st.markdown(f"##### 📍 지사 선택 <span style='color:#64748b; font-size:0.9em'>(총 {len(valid_branches)}개)</span>", unsafe_allow_html=True)
@@ -192,14 +207,14 @@ with st.container():
             selected_branch = st.multiselect("Branch", valid_branches, default=valid_branches)
     if not selected_branch: selected_branch = valid_branches
 
-    # 3. 담당자 (Dropdown) & 추가 필터 - 지사 선택에 따라 동적 변경
+    # 3. 담당자 (Dropdown) & 추가 필터
     st.markdown("---")
     valid_managers = sorted(df[
         (df['본부'].isin(selected_hq)) & 
         (df['지사'].isin(selected_branch))
     ]['구역담당영업사원'].unique().tolist())
     
-    if "미지정" in valid_managers: # '미지정'을 맨 뒤로
+    if "미지정" in valid_managers:
         valid_managers.remove("미지정")
         valid_managers.append("미지정")
 
@@ -207,7 +222,6 @@ with st.container():
     
     with col_mgr:
         st.markdown(f"##### 👤 담당자 선택 <span style='color:#64748b; font-size:0.9em'>({len(valid_managers)}명)</span>", unsafe_allow_html=True)
-        # [수정됨] 요청하신대로 드롭다운(Multiselect) 적용
         selected_managers = st.multiselect(
             "담당자 검색 및 선택", 
             valid_managers, 
@@ -219,7 +233,7 @@ with st.container():
     with col_opt:
         st.markdown("##### ⚙️ 옵션 필터")
         c_t1, c_t2 = st.columns(2)
-        with c_t1: kpi_target = st.toggle("KPI 대상만", False)
+        with c_t1: kpi_target = st.toggle("KPI 차감 '대상'만", False)
         with c_t2: arrears_only = st.toggle("체납 건만", False)
         
     st.markdown('</div>', unsafe_allow_html=True)
@@ -229,7 +243,7 @@ mask = (df['본부'].isin(selected_hq)) & \
        (df['지사'].isin(selected_branch)) & \
        (df['구역담당영업사원'].isin(selected_managers))
 
-if kpi_target: mask = mask & (df['KPI차감 10월말'].str.contains('대상', na=False))
+if kpi_target: mask = mask & (df['KPI_Status'].str.contains('대상', na=False))
 if arrears_only: mask = mask & (df['체납'] != '-') & (df['체납'] != 'Unclassified')
 
 df_filtered = df[mask]
@@ -287,15 +301,13 @@ with tab_strategy:
 
 # [TAB 2] Operations
 with tab_ops:
-    # 1. 인터랙티브 분석 존 (실적채널, L/i, 출동/영상)
+    # 1. 인터랙티브 분석 존
     st.markdown("### 🚦 다차원 구성비 분석 (Interactive Zone)")
-    st.caption("버튼을 눌러 분석 관점을 전환하세요.")
-    
     try:
-        analysis_mode = st.pills("분석 모드", ["실적채널", "L형/i형", "출동/영상"], default="실적채널", selection_mode="single")
+        analysis_mode = st.pills("분석 모드", ["실적채널", "L형/i형", "출동/영상", "정지,설변구분"], default="정지,설변구분", selection_mode="single")
     except AttributeError:
-        analysis_mode = st.radio("분석 모드", ["실적채널", "L형/i형", "출동/영상"], horizontal=True)
-    if not analysis_mode: analysis_mode = "실적채널"
+        analysis_mode = st.radio("분석 모드", ["실적채널", "L형/i형", "출동/영상", "정지,설변구분"], horizontal=True)
+    if not analysis_mode: analysis_mode = "정지,설변구분"
 
     col_dyn1, col_dyn2 = st.columns([1, 2])
     with col_dyn1:
@@ -368,12 +380,12 @@ with tab_ops:
 with tab_data:
     st.subheader("💾 Intelligent Data Grid")
     
-    d_cols = ['본부', '지사', '구역담당영업사원', 'Period', '고객번호', '상호', '월정료(VAT미포함)', '실적채널', 'L형/i형', '출동/영상', '정지,설변구분', '부실구분', 'KPI차감 10월말']
+    d_cols = ['본부', '지사', '구역담당영업사원', 'Period', '고객번호', '상호', '월정료(VAT미포함)', '실적채널', 'L형/i형', '출동/영상', '정지,설변구분', '부실구분', 'KPI_Status']
     v_cols = [c for c in d_cols if c in df_filtered.columns]
     
     def style_row(row):
         st_val = str(row.get('정지,설변구분', ''))
-        kpi_val = str(row.get('KPI차감 10월말', ''))
+        kpi_val = str(row.get('KPI_Status', ''))
         if '정지' in st_val: return ['background-color: #fee2e2; color: #b91c1c'] * len(row)
         elif '대상' in kpi_val: return ['background-color: #e0e7ff; color: #3730a3; font-weight: bold'] * len(row)
         return [''] * len(row)
