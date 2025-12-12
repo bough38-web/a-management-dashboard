@@ -44,8 +44,6 @@ st.markdown("""
             font-size: 0.7rem; padding: 2px 6px; border-radius: 10px; font-weight: 600;
         }
         
-        /* Global Action Buttons */
-        .action-btn-container { display: flex; gap: 10px; margin-bottom: 20px; }
         div.stButton > button { width: 100%; border-radius: 8px; }
     </style>
 """, unsafe_allow_html=True)
@@ -128,10 +126,6 @@ if df.empty: st.stop()
 with st.sidebar:
     st.markdown("### 🎛️ Control Panel")
     
-    # --- GLOBAL BUTTONS LOGIC ---
-    # 전체 선택: 모든 가능한 옵션을 session state에 할당
-    # 초기화: session state를 빈 리스트로 할당
-    
     col_g1, col_g2 = st.columns(2)
     
     # 필요한 전체 목록 미리 계산
@@ -166,20 +160,17 @@ with st.sidebar:
     except:
         selected_hq = st.multiselect("HQ", all_hqs, key="hq_selection", label_visibility="collapsed")
     
-    # Fallback: 아무것도 선택 안하면 전체 선택으로 간주 (데이터 처리를 위해)
+    # Fallback
     final_hq = selected_hq if selected_hq else all_hqs
 
-    # --- 2. 지사 필터 (Cascading & Sorting) ---
-    # 선택된 본부에 해당하는 지사만 필터링
+    # --- 2. 지사 필터 ---
     subset_hq = df[df['본부'].isin(final_hq)]
     valid_branches = sorted(subset_hq['지사'].unique().tolist(), key=lambda x: (get_custom_rank(x), x))
     
     st.markdown(f'<div class="sidebar-header">📍 지사 선택 <span class="count-badge">{len(valid_branches)}</span></div>', unsafe_allow_html=True)
     
-    # 유효하지 않은 지사가 선택되어 있다면 제거 (Cascading)
     if "br_selection" not in st.session_state: st.session_state.br_selection = all_branches
     else:
-        # 현재 유효한 지사 목록에 있는 것만 남김
         st.session_state.br_selection = [b for b in st.session_state.br_selection if b in valid_branches]
 
     with st.expander(f"지사 목록 ({len(valid_branches)}개)", expanded=True):
@@ -190,7 +181,7 @@ with st.sidebar:
             
     final_branch = selected_branch if selected_branch else valid_branches
 
-    # --- 3. 담당자 필터 (Cascading) ---
+    # --- 3. 담당자 필터 ---
     subset_br = subset_hq[subset_hq['지사'].isin(final_branch)]
     valid_managers = sorted(subset_br['구역담당영업사원'].unique().tolist())
     if "미지정" in valid_managers:
@@ -216,7 +207,7 @@ with st.sidebar:
 
     st.markdown("---")
     
-    # --- 4. Options ---
+    # --- Options ---
     st.markdown('<div class="sidebar-header">📊 분석 기준</div>', unsafe_allow_html=True)
     try: metric_mode = st.pills("Metric", ["건수 (Volume)", "금액 (Revenue)"], default="건수 (Volume)", selection_mode="single", label_visibility="collapsed")
     except: metric_mode = st.radio("Metric", ["건수 (Volume)", "금액 (Revenue)"], horizontal=True)
@@ -235,8 +226,6 @@ if kpi_target: mask = mask & (df['KPI_Status'].str.contains('대상', na=False))
 if arrears_only: mask = mask & (df['체납'] != '-') & (df['체납'] != 'Unclassified') & (df['체납'] != '미지정')
 
 df_filtered = df[mask].copy()
-
-# [CORE] Sort Dataframe by Rank for Consistent Visualization
 df_filtered = df_filtered.sort_values(by=['Branch_Rank', '지사'])
 
 # Global Config
@@ -301,7 +290,7 @@ with tab_strategy:
     fig_dual.update_layout(template="plotly_white", height=400, legend=dict(orientation="h", y=1.1))
     st.plotly_chart(fig_dual, use_container_width=True)
 
-# [TAB 2] Operations
+# [TAB 2] Operations (FIXED KeyError)
 with tab_ops:
     st.markdown("#### 🚦 다차원 상세 분석")
     try: sub_mode = st.pills("상세 항목", ["실적채널", "L형/i형", "출동/영상", "정지,설변구분"], default="정지,설변구분", selection_mode="single")
@@ -312,14 +301,18 @@ with tab_ops:
     with c1:
         if sub_mode in df_filtered.columns:
             mode_data = df_filtered.groupby(sub_mode)[VAL_COL].agg(AGG_FUNC).reset_index()
-            mode_data.columns = ['구분', '값']
+            mode_data.columns = ['구분', '값'] # Rename
             fig_pie = px.pie(mode_data, values='값', names='구분', hole=0.6, color_discrete_sequence=px.colors.qualitative.Safe)
             fig_pie.update_traces(textinfo='percent+label', textposition='inside')
             fig_pie.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0))
             st.plotly_chart(fig_pie, use_container_width=True)
     with c2:
         if sub_mode in df_filtered.columns:
-            mode_data = df_filtered.groupby(sub_mode)[VAL_COL].agg(AGG_FUNC).reset_index().sort_values('값')
+            # [FIXED] Rename columns BEFORE sorting
+            mode_data = df_filtered.groupby(sub_mode)[VAL_COL].agg(AGG_FUNC).reset_index()
+            mode_data.columns = ['구분', '값'] 
+            mode_data = mode_data.sort_values('값') 
+            
             fig_bar = px.bar(mode_data, x='값', y='구분', orientation='h', text='값', color='구분', title=f"{sub_mode}별 현황")
             fig_bar.update_layout(showlegend=False, template="plotly_white", xaxis_visible=False)
             fig_bar.update_traces(texttemplate='%{text:,.0f}' if metric_mode=="건수 (Volume)" else '%{text:.2s}', textposition='outside')
@@ -329,32 +322,35 @@ with tab_ops:
     
     with st.expander("🏢 본부별 현황", expanded=True):
         hq_brk = df_filtered.groupby(['본부', '정지,설변구분'])[VAL_COL].agg(AGG_FUNC).reset_index()
-        fig_hq = px.bar(hq_brk, x='본부', y=VAL_COL, color='정지,설변구분', barmode='group', text=VAL_COL, color_discrete_sequence=['#ef4444', '#3b82f6'])
+        hq_brk.columns = ['본부', '구분', '값'] # Explicit Renaming
+        fig_hq = px.bar(hq_brk, x='본부', y='값', color='구분', barmode='group', text='값', color_discrete_sequence=['#ef4444', '#3b82f6'])
         fig_hq.update_layout(template="plotly_white", margin=dict(t=20, b=20), legend=dict(orientation="h", y=1.1))
         fig_hq.update_traces(texttemplate='%{text:,.0f}' if metric_mode=="건수 (Volume)" else '%{text:.2s}', textposition='outside')
         st.plotly_chart(fig_hq, use_container_width=True)
 
-    # [IMPORTANT] 지사별 현황 with Fixed Custom Sort
     with st.expander("📍 지사별 현황 (Sorted)", expanded=True):
         br_brk = df_filtered.groupby(['지사', '정지,설변구분'])[VAL_COL].agg(AGG_FUNC).reset_index()
+        br_brk.columns = ['지사', '구분', '값']
         
-        # 순서 강제 적용을 위한 처리
+        # 순서 강제 적용
         br_brk['Rank'] = br_brk['지사'].apply(get_custom_rank)
-        # Rank 순서대로 정렬된 유니크 리스트 생성
         sorted_branches = sorted(br_brk['지사'].unique(), key=lambda x: (get_custom_rank(x), x))
         
-        fig_br = px.bar(br_brk, x='지사', y=VAL_COL, color='정지,설변구분', barmode='stack')
+        fig_br = px.bar(br_brk, x='지사', y='값', color='구분', barmode='stack')
         fig_br.update_layout(
             template="plotly_white", 
             margin=dict(t=20, b=20),
-            xaxis={'categoryorder':'array', 'categoryarray': sorted_branches} # 강제 정렬 적용
+            xaxis={'categoryorder':'array', 'categoryarray': sorted_branches}
         )
         st.plotly_chart(fig_br, use_container_width=True)
 
     with st.expander("👤 담당자별 Top 20", expanded=False):
         mgr_brk = df_filtered.groupby(['구역담당영업사원', '정지,설변구분'])[VAL_COL].agg(AGG_FUNC).reset_index()
+        mgr_brk.columns = ['구역담당영업사원', '정지,설변구분', VAL_COL] # Keep original names or rename for clarity
+        
         top_list = mgr_brk.groupby('구역담당영업사원')[VAL_COL].sum().sort_values(ascending=False).head(20).index
         mgr_top = mgr_brk[mgr_brk['구역담당영업사원'].isin(top_list)]
+        
         fig_mgr = px.bar(mgr_top, x=VAL_COL, y='구역담당영업사원', color='정지,설변구분', orientation='h')
         fig_mgr.update_layout(yaxis={'categoryorder':'total ascending'}, template="plotly_white", margin=dict(t=20, b=20))
         st.plotly_chart(fig_mgr, use_container_width=True)
@@ -371,9 +367,11 @@ with tab_ops:
         st.markdown("##### ⏱️ 정지일수 구간")
         if '당월말_정지일수_구간' in df_filtered.columns:
             s_data = df_filtered.groupby('당월말_정지일수_구간')[VAL_COL].agg(AGG_FUNC).reset_index()
+            s_data.columns = ['당월말_정지일수_구간', '값']
             s_data['sort'] = s_data['당월말_정지일수_구간'].apply(extract_num)
             s_data = s_data.sort_values('sort')
-            fig_s = px.bar(s_data, x=VAL_COL, y='당월말_정지일수_구간', orientation='h', text=VAL_COL, color=VAL_COL, color_continuous_scale='Reds')
+            
+            fig_s = px.bar(s_data, x='값', y='당월말_정지일수_구간', orientation='h', text='값', color='값', color_continuous_scale='Reds')
             fig_s.update_layout(template="plotly_white", xaxis_visible=False)
             fig_s.update_traces(texttemplate='%{text:,.0f}' if metric_mode=="건수 (Volume)" else '%{text:.2s}', textposition='outside')
             st.plotly_chart(fig_s, use_container_width=True)
@@ -382,9 +380,11 @@ with tab_ops:
         st.markdown("##### 💰 월정료 가격대")
         if '월정료 구간' in df_filtered.columns:
             p_data = df_filtered.groupby('월정료 구간')[VAL_COL].agg(AGG_FUNC).reset_index()
+            p_data.columns = ['월정료 구간', '값']
             p_data['sort'] = p_data['월정료 구간'].apply(extract_num)
             p_data = p_data.sort_values('sort')
-            fig_p = px.bar(p_data, x='월정료 구간', y=VAL_COL, text=VAL_COL, color=VAL_COL, color_continuous_scale='Blues')
+            
+            fig_p = px.bar(p_data, x='월정료 구간', y='값', text='값', color='값', color_continuous_scale='Blues')
             fig_p.update_layout(template="plotly_white", yaxis_visible=False)
             fig_p.update_traces(texttemplate='%{text:,.0f}' if metric_mode=="건수 (Volume)" else '%{text:.2s}', textposition='outside')
             st.plotly_chart(fig_p, use_container_width=True)
@@ -401,7 +401,6 @@ with tab_data:
     d_cols = ['본부', '지사', '구역담당영업사원', 'Period', '고객번호', '상호', '월정료(VAT미포함)', '실적채널', '정지,설변구분', '부실구분', 'KPI_Status']
     v_cols = [c for c in d_cols if c in df_filtered.columns]
     
-    # Performance Optimized Table
     st.dataframe(
         df_filtered[v_cols],
         use_container_width=True,
