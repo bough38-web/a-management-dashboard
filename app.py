@@ -29,16 +29,16 @@ st.markdown("""
             background-color: #f8fafc; /* Slate-50 */
         }
         
-        /* Header Title Visibility Fix */
+        /* Header Title Visibility */
         .main-title {
-            font-size: 2.5rem !important;
+            font-size: 2.2rem !important;
             font-weight: 800 !important;
-            color: #0f172a !important; /* Dark Slate */
+            color: #0f172a !important;
             margin-top: 10px !important;
             margin-bottom: 5px !important;
         }
         .sub-title {
-            font-size: 1.2rem !important;
+            font-size: 1.1rem !important;
             color: #64748b !important;
             font-weight: 500 !important;
             margin-bottom: 20px !important;
@@ -48,7 +48,7 @@ st.markdown("""
         .card-container {
             background-color: #ffffff;
             border-radius: 16px;
-            padding: 30px;
+            padding: 25px;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
             border: 1px solid #e2e8f0;
             margin-bottom: 24px;
@@ -108,16 +108,13 @@ def load_enterprise_data():
         st.error("🚨 시스템 에러: 데이터 파일(data.csv)을 찾을 수 없습니다.")
         return pd.DataFrame()
 
-    # [중요] 컬럼명 정리 및 매핑
+    # 컬럼 매핑
     if '조회구분' in df.columns:
         df['정지,설변구분'] = df['조회구분']
     
-    # KPI 컬럼 자동 탐지
+    # KPI 컬럼
     kpi_cols = [c for c in df.columns if 'KPI차감' in c]
-    if kpi_cols:
-        df['KPI_Status'] = df[kpi_cols[0]]
-    else:
-        df['KPI_Status'] = '-'
+    df['KPI_Status'] = df[kpi_cols[0]] if kpi_cols else '-'
 
     # 날짜 그룹화
     if '이벤트시작일' in df.columns:
@@ -134,7 +131,7 @@ def load_enterprise_data():
             return dt
         df['SortKey'] = df['이벤트시작일'].apply(get_sort_key)
     
-    # 수치 변환 (쉼표 제거 포함)
+    # 수치 변환
     if '월정료(VAT미포함)' in df.columns:
         df['월정료(VAT미포함)'] = df['월정료(VAT미포함)'].astype(str).str.replace(',', '').apply(pd.to_numeric, errors='coerce').fillna(0)
     
@@ -205,79 +202,61 @@ with st.container():
             selected_branch = st.multiselect("Branch", valid_branches, default=valid_branches)
     if not selected_branch: selected_branch = valid_branches
 
-    # 3. 담당자 (Pills / Multiselect Hybrid) - 지사처럼 UI 적용
+    # 3. 담당자 (Dropdown Expander)
     st.markdown("---")
     valid_managers = sorted(df[
         (df['본부'].isin(selected_hq)) & 
         (df['지사'].isin(selected_branch))
     ]['구역담당영업사원'].unique().tolist())
-    
     if "미지정" in valid_managers:
         valid_managers.remove("미지정")
         valid_managers.append("미지정")
 
-    st.markdown(f"##### 👤 담당자 선택 <span style='color:#64748b; font-size:0.9em'>({len(valid_managers)}명)</span>", unsafe_allow_html=True)
-    
-    # [NEW] 담당자 선택 UI를 지사 선택과 동일하게 구현
-    if len(valid_managers) > 30:
-        with st.expander(f"🔽 전체 담당자 목록 보기 ({len(valid_managers)}명)", expanded=False):
-            try:
-                selected_managers = st.pills("Manager", valid_managers, selection_mode="multi", default=valid_managers, key="mgr_pills_full", label_visibility="collapsed")
-            except AttributeError:
-                selected_managers = st.multiselect("담당자 검색", valid_managers, default=valid_managers)
-    else:
-        try:
-            selected_managers = st.pills("Manager", valid_managers, selection_mode="multi", default=valid_managers, key="mgr_pills_lite", label_visibility="collapsed")
-        except AttributeError:
-            selected_managers = st.multiselect("담당자 검색", valid_managers, default=valid_managers)
-            
-    if not selected_managers: selected_managers = valid_managers
+    c_mgr, c_opt = st.columns([2, 1])
+    with c_mgr:
+        st.markdown(f"##### 👤 담당자 선택 <span style='color:#64748b; font-size:0.9em'>({len(valid_managers)}명)</span>", unsafe_allow_html=True)
+        # 담당자 드롭다운을 Expander 안에 넣거나 바로 노출
+        selected_managers = st.multiselect(
+            "담당자 검색 및 선택", 
+            valid_managers, 
+            default=valid_managers,
+            placeholder="담당자를 선택하세요 (여러 명 가능)"
+        )
+        if not selected_managers: selected_managers = valid_managers
 
-    # 4. 추가 필터
-    st.markdown("---")
-    st.markdown("##### ⚙️ 옵션 필터")
-    c_t1, c_t2 = st.columns(2)
-    with c_t1: kpi_target = st.toggle("KPI 차감 '대상'만", False)
-    with c_t2: arrears_only = st.toggle("체납 건만", False)
+    with c_opt:
+        st.markdown("##### ⚙️ 옵션 필터 (전체 적용)")
+        c_t1, c_t2 = st.columns(2)
+        with c_t1: kpi_target = st.toggle("KPI 대상만", False)
+        with c_t2: arrears_only = st.toggle("체납 건만", False)
         
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Apply Filters
+# [CORE LOGIC] Apply Filters Dynamically
 mask = (df['본부'].isin(selected_hq)) & \
        (df['지사'].isin(selected_branch)) & \
        (df['구역담당영업사원'].isin(selected_managers))
 
 if kpi_target: mask = mask & (df['KPI_Status'].str.contains('대상', na=False))
-if arrears_only: mask = mask & (df['체납'] != '-') & (df['체납'] != 'Unclassified')
+if arrears_only: mask = mask & (df['체납'] != '-') & (df['체납'] != 'Unclassified') & (df['체납'] != '미지정')
 
 df_filtered = df[mask]
 
 # -----------------------------------------------------------------------------
-# 4. KPI Summary (Executive Summary 분리)
+# 4. KPI Summary
 # -----------------------------------------------------------------------------
-st.markdown("### 🚀 Executive Summary (정지 vs 설변)")
+st.markdown("### 🚀 Executive Summary")
 k1, k2, k3, k4 = st.columns(4)
 
 def fmt_money(val): return f"₩{val/10000:,.0f} 만"
 
-# 정지 데이터 집계
 susp_df = df_filtered[df_filtered['정지,설변구분'] == '정지']
-susp_cnt = len(susp_df)
-susp_rev = susp_df['월정료(VAT미포함)'].sum()
-
-# 설변 데이터 집계
 chg_df = df_filtered[df_filtered['정지,설변구분'] == '설변']
-chg_cnt = len(chg_df)
-chg_rev = chg_df['월정료(VAT미포함)'].sum()
 
-# [NEW] KPI 카드를 정지와 설변으로 명확히 분리
-k1.metric("⛔ 정지 건수", f"{susp_cnt:,.0f} 건", "Suspension Count")
-k2.metric("⛔ 정지 월정료", fmt_money(susp_rev), "Suspension Revenue", delta_color="inverse")
-k3.metric("🔄 설변 건수", f"{chg_cnt:,.0f} 건", "Change Count")
-k4.metric("🔄 설변 월정료", fmt_money(chg_rev), "Change Revenue")
-
-# 전체 합계 정보는 하단에 작게 표시하거나 별도 영역에 배치
-st.caption(f"**전체 합계 (Total):** {len(df_filtered):,.0f} 건 | {fmt_money(df_filtered['월정료(VAT미포함)'].sum())}")
+k1.metric("⛔ 정지 건수", f"{len(susp_df):,.0f} 건", "Suspension Count")
+k2.metric("⛔ 정지 월정료", fmt_money(susp_df['월정료(VAT미포함)'].sum()), "Suspension Revenue", delta_color="inverse")
+k3.metric("🔄 설변 건수", f"{len(chg_df):,.0f} 건", "Change Count")
+k4.metric("🔄 설변 월정료", fmt_money(chg_df['월정료(VAT미포함)'].sum()), "Change Revenue")
 
 st.markdown("---")
 
@@ -312,45 +291,98 @@ with tab_strategy:
     fig_dual.update_layout(template="plotly_white", height=450, hovermode="x unified", legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center"))
     st.plotly_chart(fig_dual, use_container_width=True)
 
-# [TAB 2] Operations
+# [TAB 2] Operations (Enhanced with Metric Toggle & Collapsibles)
 with tab_ops:
-    # 1. 인터랙티브 분석 존
     st.markdown("### 🚦 다차원 구성비 분석 (Interactive Zone)")
+    
+    # [NEW] Metric Switcher (건수 vs 금액)
+    c_sw1, c_sw2 = st.columns([1, 3])
+    with c_sw1:
+        try:
+            metric_type = st.pills("📊 분석 기준", ["건수(Volume)", "금액(Revenue)"], default="건수(Volume)", selection_mode="single")
+        except AttributeError:
+            metric_type = st.radio("분석 기준", ["건수(Volume)", "금액(Revenue)"], horizontal=True)
+    
+    # Define value column based on selection
+    val_col = '계약번호' if metric_type == "건수(Volume)" else '월정료(VAT미포함)'
+    agg_func = 'count' if metric_type == "건수(Volume)" else 'sum'
+
+    # Interactive Charts
     try:
-        analysis_mode = st.pills("분석 모드", ["실적채널", "L형/i형", "출동/영상", "정지,설변구분"], default="정지,설변구분", selection_mode="single")
+        analysis_mode = st.pills("분석 항목", ["실적채널", "L형/i형", "출동/영상", "정지,설변구분"], default="정지,설변구분", selection_mode="single")
     except AttributeError:
-        analysis_mode = st.radio("분석 모드", ["실적채널", "L형/i형", "출동/영상", "정지,설변구분"], horizontal=True)
+        analysis_mode = st.radio("분석 항목", ["실적채널", "L형/i형", "출동/영상", "정지,설변구분"], horizontal=True)
     if not analysis_mode: analysis_mode = "정지,설변구분"
 
     col_dyn1, col_dyn2 = st.columns([1, 2])
     with col_dyn1:
         st.markdown(f"**{analysis_mode} 비중 (Pie)**")
         if analysis_mode in df_filtered.columns:
-            mode_cnt = df_filtered[analysis_mode].value_counts().reset_index()
-            mode_cnt.columns = ['구분', '건수']
-            fig_pie = px.pie(mode_cnt, values='건수', names='구분', hole=0.5, color_discrete_sequence=px.colors.qualitative.Safe)
+            mode_cnt = df_filtered.groupby(analysis_mode)[val_col].agg(agg_func).reset_index()
+            mode_cnt.columns = ['구분', '값']
+            fig_pie = px.pie(mode_cnt, values='값', names='구분', hole=0.5, color_discrete_sequence=px.colors.qualitative.Safe)
             fig_pie.update_traces(textinfo='percent+label')
             st.plotly_chart(fig_pie, use_container_width=True)
     with col_dyn2:
-        st.markdown(f"**{analysis_mode} 상세 현황 (Bar)**")
+        st.markdown(f"**{analysis_mode} 상세 ({metric_type})**")
         if analysis_mode in df_filtered.columns:
-            mode_cnt = df_filtered[analysis_mode].value_counts().reset_index()
-            mode_cnt.columns = ['구분', '건수']
-            fig_bar = px.bar(mode_cnt, x='구분', y='건수', text='건수', color='구분', title=f"{analysis_mode} 분포")
+            mode_cnt = df_filtered.groupby(analysis_mode)[val_col].agg(agg_func).reset_index()
+            mode_cnt.columns = ['구분', '값']
+            fig_bar = px.bar(mode_cnt, x='구분', y='값', text='값', color='구분', title=f"{analysis_mode} 분포")
             fig_bar.update_layout(showlegend=False, template="plotly_white")
+            if metric_type == "금액(Revenue)": fig_bar.update_traces(texttemplate='%{text:,.0f}')
             st.plotly_chart(fig_bar, use_container_width=True)
     
     st.markdown("---")
     
-    # 2. 지사별 성과 & 부실
-    op_c1, op_c2 = st.columns([1, 1])
-    with op_c1:
-        st.subheader("📊 지사별 성과 매트릭스")
-        br_kpi = df_filtered.groupby(['본부', '지사']).agg({'계약번호':'count', '월정료(VAT미포함)':['mean','sum']}).reset_index()
-        br_kpi.columns = ['본부', '지사', '건수', '평균단가', '총매출']
-        fig_bub = px.scatter(br_kpi, x='건수', y='평균단가', size='총매출', color='본부', hover_name='지사', template="plotly_white", color_discrete_sequence=px.colors.qualitative.G10)
-        st.plotly_chart(fig_bub, use_container_width=True)
-    with op_c2:
+    # [NEW] Suspension vs Change Breakdown by Hierarchy (Collapsible)
+    st.subheader("🔍 정지 vs 설변 계층별 상세 분석")
+    
+    # 1. 본부별
+    with st.expander("🏢 본부별 정지/설변 현황 (펼치기/접기)", expanded=True):
+        hq_brk = df_filtered.groupby(['본부', '정지,설변구분'])[val_col].agg(agg_func).reset_index()
+        hq_brk.columns = ['본부', '구분', '값']
+        fig_hq_grp = px.bar(hq_brk, x='본부', y='값', color='구분', barmode='group', text='값', title=f"본부별 {metric_type}")
+        if metric_type == "금액(Revenue)": fig_hq_grp.update_traces(texttemplate='%{text:,.0f}')
+        st.plotly_chart(fig_hq_grp, use_container_width=True)
+
+    # 2. 지사별
+    with st.expander("📍 지사별 정지/설변 현황 (펼치기/접기)", expanded=False):
+        br_brk = df_filtered.groupby(['지사', '정지,설변구분'])[val_col].agg(agg_func).reset_index()
+        br_brk.columns = ['지사', '구분', '값']
+        fig_br_grp = px.bar(br_brk, x='지사', y='값', color='구분', title=f"지사별 {metric_type} (Stacked)")
+        st.plotly_chart(fig_br_grp, use_container_width=True)
+
+    # 3. 담당자별 (Top 20)
+    with st.expander("👤 담당자별 정지/설변 Top 20 (펼치기/접기)", expanded=False):
+        mgr_brk = df_filtered.groupby(['구역담당영업사원', '정지,설변구분'])[val_col].agg(agg_func).reset_index()
+        mgr_brk.columns = ['담당자', '구분', '값']
+        # Sort by value to get Top 20
+        top_mgrs = mgr_brk.groupby('담당자')['값'].sum().sort_values(ascending=False).head(20).index
+        mgr_brk_top = mgr_brk[mgr_brk['담당자'].isin(top_mgrs)]
+        
+        fig_mgr_grp = px.bar(mgr_brk_top, x='값', y='담당자', color='구분', orientation='h', title=f"상위 담당자 {metric_type}")
+        fig_mgr_grp.update_layout(yaxis={'categoryorder':'total ascending'})
+        st.plotly_chart(fig_mgr_grp, use_container_width=True)
+
+    st.markdown("---")
+    
+    # 정지일수 & 월정료 & 부실
+    c_misc1, c_misc2 = st.columns(2)
+    def extract_num(s):
+        nums = re.findall(r'\d+', str(s))
+        return int(nums[0]) if nums else 0
+
+    with c_misc1:
+        st.subheader("⏱️ 정지일수 구간")
+        if '당월말_정지일수_구간' in df_filtered.columns:
+            susp_dist = df_filtered['당월말_정지일수_구간'].value_counts().reset_index()
+            susp_dist.columns = ['구간', '건수']
+            susp_dist['s'] = susp_dist['구간'].apply(extract_num)
+            susp_dist = susp_dist.sort_values('s')
+            fig_susp = px.bar(susp_dist, x='건수', y='구간', orientation='h', text='건수', color='건수', color_continuous_scale='Reds')
+            st.plotly_chart(fig_susp, use_container_width=True)
+    with c_misc2:
         st.subheader("⚠️ 부실 사유 분석")
         if '부실구분' in df_filtered.columns:
             bad_cnt = df_filtered['부실구분'].value_counts().reset_index()
@@ -361,33 +393,6 @@ with tab_ops:
                 st.plotly_chart(fig_bad, use_container_width=True)
             else:
                 st.info("부실 데이터 없음")
-
-    st.markdown("---")
-    
-    # 3. 정지/월정료 구간 (스마트 정렬)
-    op_c3, op_c4 = st.columns(2)
-    def extract_num(s):
-        nums = re.findall(r'\d+', str(s))
-        return int(nums[0]) if nums else 0
-
-    with op_c3:
-        st.subheader("⏱️ 정지일수 구간")
-        if '당월말_정지일수_구간' in df_filtered.columns:
-            susp_dist = df_filtered['당월말_정지일수_구간'].value_counts().reset_index()
-            susp_dist.columns = ['구간', '건수']
-            susp_dist['s'] = susp_dist['구간'].apply(extract_num)
-            susp_dist = susp_dist.sort_values('s')
-            fig_susp = px.bar(susp_dist, x='건수', y='구간', orientation='h', text='건수', color='건수', color_continuous_scale='Reds')
-            st.plotly_chart(fig_susp, use_container_width=True)
-    with op_c4:
-        st.subheader("💰 월정료 가격대")
-        if '월정료 구간' in df_filtered.columns:
-            prc_dist = df_filtered['월정료 구간'].value_counts().reset_index()
-            prc_dist.columns = ['구간', '건수']
-            prc_dist['s'] = prc_dist['구간'].apply(extract_num)
-            prc_dist = prc_dist.sort_values('s')
-            fig_prc = px.bar(prc_dist, x='구간', y='건수', text='건수', color='건수', color_continuous_scale='Blues')
-            st.plotly_chart(fig_prc, use_container_width=True)
 
 # [TAB 3] Data Grid
 with tab_data:
