@@ -6,7 +6,7 @@ from plotly.subplots import make_subplots
 import re
 
 # -----------------------------------------------------------------------------
-# 1. Enterprise Config & Expert Design System
+# 1. Enterprise Config & Design System
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="KTT Enterprise Analytics",
@@ -15,72 +15,93 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# [CSS] Top-tier Dashboard Styling
+# [CSS] 기업용 대시보드 스타일링
 st.markdown("""
     <style>
         @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
         
-        /* 1. Global Reset */
+        /* Global Font & Reset */
         html, body, [class*="css"] {
-            font-family: 'Pretendard', sans-serif;
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
             color: #1e293b;
         }
         .stApp {
             background-color: #f8fafc; /* Slate-50 */
         }
         
-        /* 2. Header Gradient */
+        /* Header Title Visibility */
         .main-title {
-            font-size: 2.2rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-top: 10px;
+            font-size: 2.2rem !important;
+            font-weight: 800 !important;
+            color: #0f172a !important;
+            margin-top: 10px !important;
+            margin-bottom: 5px !important;
+        }
+        .sub-title {
+            font-size: 1.1rem !important;
+            color: #64748b !important;
+            font-weight: 500 !important;
+            margin-bottom: 20px !important;
         }
         
-        /* 3. Advanced Card Container */
+        /* Card Container */
         .card-container {
-            background: #ffffff;
-            border-radius: 20px;
+            background-color: #ffffff;
+            border-radius: 16px;
             padding: 25px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
             border: 1px solid #e2e8f0;
-            margin-bottom: 25px;
+            margin-bottom: 24px;
         }
         
-        /* 4. Stylish Pills Buttons */
+        /* KPI Metrics Style */
+        div[data-testid="stMetric"] {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        }
+        div[data-testid="stMetric"]:hover {
+            border-color: #6366f1;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* Pills Button Style */
         div[data-testid="stPills"] { gap: 8px; flex-wrap: wrap; }
         div[data-testid="stPills"] button[aria-selected="true"] {
-            background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important;
+            background: linear-gradient(135deg, #4338ca 0%, #3730a3 100%) !important;
             color: white !important;
             border: none;
-            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
             font-weight: 600;
-            padding: 6px 18px;
-            transition: all 0.3s ease;
+            padding: 6px 16px;
         }
         div[data-testid="stPills"] button[aria-selected="false"] {
             background-color: #f1f5f9 !important;
             border: 1px solid #cbd5e1 !important;
-            color: #64748b !important;
+            color: #475569 !important;
             font-weight: 500;
         }
-        div[data-testid="stPills"] button:hover {
-            transform: translateY(-1px);
-            border-color: #6366f1 !important;
-            color: #6366f1 !important;
+        
+        /* Tab Navigation */
+        .stTabs [data-baseweb="tab-list"] { gap: 8px; margin-bottom: 20px; }
+        .stTabs [data-baseweb="tab"] {
+            height: 44px; background-color: white; border-radius: 8px;
+            padding: 0 20px; font-weight: 600; border: 1px solid #e2e8f0; color: #64748b;
+        }
+        .stTabs [aria-selected="true"] {
+            background-color: #3b82f6 !important; color: white !important; border: none;
         }
         
-        /* 5. Section Headers inside Filters */
+        /* Filter Label */
         .filter-label {
             font-size: 0.95rem;
             font-weight: 700;
             color: #334155;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             display: flex;
             align-items: center;
-            gap: 6px;
         }
         .count-badge {
             background-color: #e0e7ff;
@@ -89,29 +110,7 @@ st.markdown("""
             padding: 2px 8px;
             border-radius: 12px;
             font-weight: 600;
-        }
-        
-        /* 6. Metric Cards */
-        div[data-testid="stMetric"] {
-            background-color: white;
-            padding: 20px;
-            border-radius: 16px;
-            border: 1px solid #e2e8f0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-            transition: all 0.2s;
-        }
-        div[data-testid="stMetric"]:hover {
-            border-color: #6366f1;
-            box-shadow: 0 8px 16px -4px rgba(99, 102, 241, 0.2);
-            transform: translateY(-2px);
-        }
-        
-        /* 7. Expander Styling */
-        .streamlit-expanderHeader {
-            font-weight: 600;
-            color: #475569;
-            background-color: #f8fafc;
-            border-radius: 8px;
+            margin-left: 6px;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -138,6 +137,7 @@ def load_enterprise_data():
     if '조회구분' in df.columns:
         df['정지,설변구분'] = df['조회구분']
     
+    # KPI 컬럼
     kpi_cols = [c for c in df.columns if 'KPI차감' in c]
     df['KPI_Status'] = df[kpi_cols[0]] if kpi_cols else '-'
 
@@ -160,36 +160,48 @@ def load_enterprise_data():
     if '월정료(VAT미포함)' in df.columns:
         df['월정료(VAT미포함)'] = df['월정료(VAT미포함)'].astype(str).str.replace(',', '').apply(pd.to_numeric, errors='coerce').fillna(0)
     
-    for col in ['계약번호', '당월말_정지일수']:
-        if col in df.columns: df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    numeric_cols = ['계약번호', '당월말_정지일수']
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
     
     # 결측 처리
-    target_cols = ['본부', '지사', '출동/영상', 'L형/i형', '정지,설변구분', '서비스(소)', '부실구분', '체납', '실적채널', '구역담당영업사원']
-    for col in target_cols:
-        if col not in df.columns: df[col] = "Unclassified"
-        else: df[col] = df[col].fillna("미지정")
+    fill_cols = [
+        '본부', '지사', '출동/영상', 'L형/i형', '정지,설변구분', 
+        '서비스(소)', '부실구분', 'KPI_Status', '체납', 
+        '당월말_정지일수_구간', '월정료 구간', '실적채널', '구역담당영업사원'
+    ]
+    for col in fill_cols:
+        if col not in df.columns:
+            df[col] = "Unclassified"
+        else:
+            df[col] = df[col].fillna("미지정")
             
     return df
 
 df = load_enterprise_data()
-if df.empty: st.stop()
+if df.empty:
+    st.stop()
 
 # -----------------------------------------------------------------------------
-# 3. Control Center (Enhanced Button Layout)
+# 3. Header & Dynamic Filters
 # -----------------------------------------------------------------------------
-c1, c2 = st.columns([3, 1])
-with c1:
-    st.markdown('<div class="main-title">KTT Enterprise Analytics</div>', unsafe_allow_html=True)
-    st.caption("Strategic Insights & Operational Dashboard")
-with c2:
-    st.markdown(f"<div style='text-align:right; color:#64748b; padding-top:25px;'>Data: {pd.Timestamp.now().strftime('%Y-%m-%d')}</div>", unsafe_allow_html=True)
+with st.container():
+    c_head1, c_head2 = st.columns([3, 1])
+    with c_head1:
+        st.markdown('<h1 class="main-title">KTT Enterprise Analytics</h1>', unsafe_allow_html=True)
+        st.markdown('<div class="sub-title">Strategic Insights & Operational Dashboard</div>', unsafe_allow_html=True)
+    with c_head2:
+        st.markdown(f"<div style='text-align:right; color:#64748b; padding-top:25px; font-weight:500;'>Data Date: {pd.Timestamp.now().strftime('%Y-%m-%d')}</div>", unsafe_allow_html=True)
 
+# Filter Container
 with st.container():
     st.markdown('<div class="card-container">', unsafe_allow_html=True)
     
-    # [1] 본부 (Always Open)
+    # 1. 본부 선택 (Pills - 항상 펼침)
     all_hqs = sorted(df['본부'].unique().tolist())
     st.markdown(f'<div class="filter-label">🏢 본부 선택 <span class="count-badge">{len(all_hqs)}</span></div>', unsafe_allow_html=True)
+    
     if "hq_select" not in st.session_state: st.session_state.hq_select = all_hqs
     
     try:
@@ -200,12 +212,11 @@ with st.container():
 
     st.markdown("---")
 
-    # [2] 지사 (Collapsible & Stylish)
+    # 2. 지사 선택 (Expander - 깔끔하게 접기)
     valid_branches = sorted(df[df['본부'].isin(selected_hq)]['지사'].unique().tolist())
-    st.markdown(f'<div class="filter-label">📍 지사 선택 <span class="count-badge">{len(valid_branches)}</span></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="filter-label">📍 지사 선택 <span class="count-badge">{len(valid_branches)}개소</span></div>', unsafe_allow_html=True)
     
-    # 지사 선택 UI
-    with st.expander(f"🔽 지사 목록 펼치기/접기 (총 {len(valid_branches)}개소)", expanded=False):
+    with st.expander(f"🔽 지사 전체 목록 펼치기 ({len(valid_branches)}개)", expanded=False):
         try:
             selected_branch = st.pills("Branch", valid_branches, selection_mode="multi", default=valid_branches, key="br_pills", label_visibility="collapsed")
         except:
@@ -214,7 +225,7 @@ with st.container():
 
     st.markdown("---")
 
-    # [3] 담당자 (Collapsible & Stylish - Same as Branch)
+    # 3. 담당자 선택 (Expander - 지사와 동일한 스타일 적용)
     valid_managers = sorted(df[
         (df['본부'].isin(selected_hq)) & 
         (df['지사'].isin(selected_branch))
@@ -223,10 +234,10 @@ with st.container():
         valid_managers.remove("미지정")
         valid_managers.append("미지정")
 
-    st.markdown(f'<div class="filter-label">👤 담당자 선택 <span class="count-badge">{len(valid_managers)}</span></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="filter-label">👤 담당자 선택 <span class="count-badge">{len(valid_managers)}명</span></div>', unsafe_allow_html=True)
     
     # [IMPROVED] 담당자 선택 UI (지사와 동일한 Expander + Pills/Multiselect 구조)
-    with st.expander(f"🔽 담당자 목록 펼치기/접기 (총 {len(valid_managers)}명)", expanded=False):
+    with st.expander(f"🔽 담당자 전체 목록 펼치기 ({len(valid_managers)}명)", expanded=False):
         if len(valid_managers) > 50:
              selected_managers = st.multiselect("Manager", valid_managers, default=valid_managers, label_visibility="collapsed", placeholder="담당자를 검색하거나 선택하세요")
         else:
@@ -239,7 +250,7 @@ with st.container():
 
     st.markdown("---")
 
-    # [4] 분석 기준 및 옵션 (가로 배치)
+    # 4. 분석 기준 및 옵션 (가로 배치)
     c_met, c_opt = st.columns([1, 2])
     
     with c_met:
@@ -257,7 +268,7 @@ with st.container():
         
     st.markdown('</div>', unsafe_allow_html=True)
 
-# [CORE LOGIC] Filter Application
+# [CORE LOGIC] Apply Filters Dynamically
 mask = (df['본부'].isin(selected_hq)) & \
        (df['지사'].isin(selected_branch)) & \
        (df['구역담당영업사원'].isin(selected_managers))
@@ -329,7 +340,7 @@ with tab_strategy:
     fig_dual.update_layout(template="plotly_white", height=400, hovermode="x unified", legend=dict(orientation="h", y=1.1), margin=dict(l=20, r=20, t=40, b=20))
     st.plotly_chart(fig_dual, use_container_width=True)
 
-# [TAB 2] Operations (Stylish Bar Charts)
+# [TAB 2] Operations (Fixed KeyError)
 with tab_ops:
     # 1. Interactive Analysis
     st.markdown("#### 🚦 다차원 상세 분석")
@@ -350,8 +361,11 @@ with tab_ops:
             st.plotly_chart(fig_pie, use_container_width=True)
     with c_dyn2:
         if sub_mode in df_filtered.columns:
-            mode_data = df_filtered.groupby(sub_mode)[VAL_COL].agg(AGG_FUNC).reset_index().sort_values('값', ascending=True)
-            mode_data.columns = ['구분', '값']
+            # [FIXED] Split aggregation and sorting to avoid KeyError
+            mode_data = df_filtered.groupby(sub_mode)[VAL_COL].agg(AGG_FUNC).reset_index()
+            mode_data.columns = ['구분', '값'] # Rename first
+            mode_data = mode_data.sort_values('값', ascending=True) # Then sort
+            
             # Stylish Bar Chart
             fig_bar = px.bar(mode_data, x='값', y='구분', orientation='h', text='값', color='구분', title=f"{sub_mode}별 현황")
             fig_bar.update_layout(showlegend=False, template="plotly_white", xaxis_visible=False, margin=dict(l=10, r=10, t=40, b=10))
