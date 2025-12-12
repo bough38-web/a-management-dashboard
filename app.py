@@ -3,12 +3,11 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import re
 from datetime import datetime
 
-# -----------------------------------------------------------------------------
-# 1. System Configuration & Design System
-# -----------------------------------------------------------------------------
+# ================================================================
+# 1. GLOBAL SETTINGS & DESIGN SYSTEM
+# ================================================================
 st.set_page_config(
     page_title="KTT Enterprise Insight Hub",
     page_icon="💎",
@@ -16,421 +15,319 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# [Modern SaaS Design System CSS]
+# ------------------------ CSS Injection --------------------------
 st.markdown("""
-    <style>
-        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
-        
-        :root {
-            --primary-color: #4F46E5;
-            --secondary-color: #818CF8;
-            --bg-color: #F8FAFC;
-            --card-bg: #FFFFFF;
-            --text-main: #1E293B;
-            --text-sub: #64748B;
-        }
+<style>
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
 
-        /* Global Reset */
-        .stApp { background-color: var(--bg-color); font-family: 'Pretendard', sans-serif; }
-        h1, h2, h3 { letter-spacing: -0.02em; }
+:root {
+    --primary: #4F46E5;
+    --secondary: #818CF8;
+    --bg: #F8FAFC;
+    --card: #FFFFFF;
+    --text: #1E293B;
+    --sub: #64748B;
+}
 
-        /* Custom Header */
-        .dashboard-header {
-            padding: 1.5rem 0;
-            margin-bottom: 2rem;
-            border-bottom: 1px solid #E2E8F0;
-        }
-        .header-title {
-            font-size: 2.2rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, #1E293B 0%, #4F46E5 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .header-meta {
-            font-size: 0.9rem;
-            color: var(--text-sub);
-            margin-top: 0.5rem;
-        }
+/* App Reset */
+.stApp { background-color: var(--bg); font-family: 'Pretendard'; }
 
-        /* KPI Cards (Glassmorphism + Hover Effect) */
-        .kpi-container {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-        .kpi-card {
-            background: var(--card-bg);
-            border-radius: 16px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-            border: 1px solid #F1F5F9;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-            overflow: hidden;
-        }
-        .kpi-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.1), 0 4px 6px -2px rgba(79, 70, 229, 0.05);
-            border-color: var(--secondary-color);
-        }
-        .kpi-label { font-size: 0.85rem; font-weight: 600; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.05em; }
-        .kpi-value { font-size: 1.8rem; font-weight: 800; color: var(--text-main); margin: 0.5rem 0; }
-        .kpi-delta { font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 4px; }
-        .delta-pos { color: #10B981; background: #ECFDF5; padding: 2px 8px; border-radius: 999px; width: fit-content; }
-        .delta-neg { color: #EF4444; background: #FEF2F2; padding: 2px 8px; border-radius: 999px; width: fit-content; }
-        .kpi-icon { position: absolute; top: 1.5rem; right: 1.5rem; opacity: 0.1; font-size: 2.5rem; color: var(--primary-color); }
+/* Header */
+.header { padding: 1.5rem 0; border-bottom: 1px solid #E2E8F0; margin-bottom: 1.8rem; }
+.header-title { font-size: 2.35rem; font-weight: 900;
+    background: linear-gradient(135deg,#1E293B,#4F46E5);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.header-sub { color: var(--sub); margin-top: .4rem; }
 
-        /* Chart Containers */
-        .chart-box {
-            background: var(--card-bg);
-            border-radius: 20px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
-            border: 1px solid #F1F5F9;
-            height: 100%;
-        }
-        .chart-header {
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: var(--text-main);
-            margin-bottom: 1.5rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+/* KPI Cards */
+.kpi-box { display: grid; grid-template-columns: repeat(4,1fr); gap: 1.3rem; }
+.kpi-card {
+    background: var(--card); border-radius: 18px;
+    padding: 1.4rem; border: 1px solid #E2E8F0;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.03);
+    transition: .25s ease; position: relative;
+}
+.kpi-card:hover { transform: translateY(-4px); border-color: var(--secondary);
+    box-shadow: 0 10px 16px rgba(79,70,229,0.12);
+}
+.kpi-label { font-size: .85rem; color: var(--sub); font-weight: 600; }
+.kpi-value { font-size: 1.7rem; font-weight: 800; color: var(--text); margin: .45rem 0; }
 
-        /* Custom Sidebar */
-        [data-testid="stSidebar"] { background-color: #FFFFFF; border-right: 1px solid #E2E8F0; }
-        .sidebar-section { margin-bottom: 2rem; }
-        .sidebar-label { font-size: 0.8rem; font-weight: 700; color: var(--text-sub); margin-bottom: 0.5rem; text-transform: uppercase; }
-        
-        /* Pills Customization */
-        div[data-testid="stPills"] { gap: 8px; }
-        div[data-testid="stPills"] button[aria-selected="true"] {
-            background: var(--primary-color) !important;
-            color: white !important;
-            border: none;
-            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
-        }
-    </style>
+.delta-pos {
+    color: #10B981; background: #ECFDF5;
+    padding: 2px 8px; border-radius: 999px; font-size: .8rem; font-weight: 600;
+}
+.delta-neg {
+    color: #EF4444; background: #FEF2F2;
+    padding: 2px 8px; border-radius: 999px; font-size: .8rem; font-weight: 600;
+}
+
+/* Chart Container */
+.chart-box {
+    background: var(--card);
+    padding: 1.4rem;
+    border-radius: 18px;
+    border: 1px solid #E2E8F0;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+    margin-bottom: 1.4rem;
+}
+</style>
 """, unsafe_allow_html=True)
 
-# -----------------------------------------------------------------------------
-# 2. Advanced Logic & Utilities (OOP)
-# -----------------------------------------------------------------------------
-class DataProcessor:
-    @staticmethod
-    def format_currency(value):
-        if value == 0: return "0"
-        elif abs(value) >= 100_000_000: return f"{value/100_000_000:,.2f}억"
-        elif abs(value) >= 1_000_000: return f"{value/1_000_000:,.1f}백만"
-        else: return f"{value/1_000:,.0f}천"
-
-    @staticmethod
-    @st.cache_data(ttl=3600)
-    def load_data(file_path="data.csv"):
+# ================================================================
+# 2. DATA LOADER + PROCESSOR
+# ================================================================
+@st.cache_data(ttl=1800)
+def load_data():
+    try:
         try:
-            # 실무 팁: utf-8이 안되면 cp949로 시도
-            try:
-                df = pd.read_csv(file_path, encoding='utf-8')
-            except UnicodeDecodeError:
-                df = pd.read_csv(file_path, encoding='cp949')
-        except FileNotFoundError:
-            # Fallback for demo if file doesn't exist
-            return pd.DataFrame()
+            df = pd.read_csv("data.csv", encoding="utf-8")
+        except:
+            df = pd.read_csv("data.csv", encoding="cp949")
+    except FileNotFoundError:
+        st.error("❌ data.csv 파일을 찾을 수 없습니다.")
+        return pd.DataFrame()
 
-        # Preprocessing Pipeline
-        if '조회구분' in df.columns: df['정지,설변구분'] = df['조회구분']
-        
-        # KPI Logic
-        kpi_cols = [c for c in df.columns if 'KPI차감' in c]
-        df['KPI_Status'] = df[kpi_cols[0]] if kpi_cols else '-'
-        
-        # Date Logic
-        if '이벤트시작일' in df.columns:
-            df['이벤트시작일'] = pd.to_datetime(df['이벤트시작일'], errors='coerce')
-            df['Period_YYYYMM'] = df['이벤트시작일'].dt.to_period('M').astype(str)
-            df['Year'] = df['이벤트시작일'].dt.year
+    # Base mappings
+    if '조회구분' in df.columns:
+        df['정지,설변구분'] = df['조회구분']
 
-        # Numeric Conversion
-        numeric_cols = ['월정료(VAT미포함)', '계약번호', '당월말_정지일수']
-        for col in numeric_cols:
-            if col in df.columns:
-                if df[col].dtype == object:
-                    df[col] = df[col].astype(str).str.replace(',', '').apply(pd.to_numeric, errors='coerce')
-                df[col] = df[col].fillna(0)
+    # KPI
+    kpi_cols = [c for c in df.columns if 'KPI차감' in c]
+    df['KPI_Status'] = df[kpi_cols[0]] if kpi_cols else "-"
 
-        # Missing Value Handling
-        fill_cols = ['본부', '지사', '출동/영상', 'L형/i형', '정지,설변구분', '서비스(소)', '부실구분', '체납', '실적채널', '구역담당영업사원']
-        for col in fill_cols:
-            if col not in df.columns: df[col] = "Unclassified"
-            else: df[col] = df[col].fillna("미지정")
-            
-        return df
+    # Dates
+    if "이벤트시작일" in df.columns:
+        df["이벤트시작일"] = pd.to_datetime(df["이벤트시작일"], errors="coerce")
+        df["Period"] = df["이벤트시작일"].dt.strftime("%Y-%m")
+        df["Sort"] = df["이벤트시작일"].dt.to_period("M").dt.to_timestamp()
 
-class ChartFactory:
-    """Enterprise Chart Design System"""
-    COLORS = ['#6366F1', # Indigo
-              '#EC4899', # Pink
-              '#10B981', # Emerald
-              '#F59E0B', # Amber
-              '#3B82F6', # Blue
-              '#8B5CF6'] # Violet
+    # Numeric fields
+    num_cols = ["월정료(VAT미포함)", "당월말_정지일수"]
+    for col in num_cols:
+        if col in df.columns:
+            df[col] = (
+                df[col].astype(str)
+                .str.replace(",", "")
+                .apply(pd.to_numeric, errors="coerce")
+                .fillna(0)
+            )
 
-    @staticmethod
-    def get_layout(title="", height=350):
-        return dict(
-            title=dict(text=title, font=dict(size=16, family="Pretendard", weight="bold")),
-            template="plotly_white",
-            height=height,
-            margin=dict(l=20, r=20, t=50, b=20),
-            hovermode="x unified",
-            showlegend=True,
-            legend=dict(orientation="h", y=1.1, x=1, xanchor="right")
-        )
+    # Defaults
+    fill_cols = ['본부','지사','구역담당영업사원','출동/영상','L형/i형','실적채널','체납','부실구분','정지,설변구분']
+    for col in fill_cols:
+        if col not in df.columns:
+            df[col] = "미지정"
+        else:
+            df[col] = df[col].fillna("미지정")
 
-# -----------------------------------------------------------------------------
-# 3. Application Logic
-# -----------------------------------------------------------------------------
+    return df
+
+
+# ================================================================
+# 3. UTILITIES
+# ================================================================
+def fmt(x, mode):
+    if mode == "건수 (Volume)":
+        return f"{x:,.0f} 건"
+    return format_currency(x)
+
+def format_currency(value):
+    if value >= 100_000_000:
+        return f"{value/100_000_000:.1f}억"
+    if value >= 1_000_000:
+        return f"{value/1_000_000:.1f}백만"
+    return f"{value/1_000:,.0f}천"
+
+
+# ================================================================
+# 4. MAIN APP
+# ================================================================
 def main():
-    # A. Data Loading
-    raw_df = DataProcessor.load_data()
-    
-    if raw_df.empty:
-        st.error("🚨 데이터 파일을 찾을 수 없습니다. (data.csv)")
-        # Demo Data Generator could go here
+    df = load_data()
+    if df.empty:
         st.stop()
 
-    # B. Sidebar Control Logic
+    # ============================================================
+    # Sidebar Filters
+    # ============================================================
     with st.sidebar:
-        st.markdown("### 🎛️ Analysis Hub")
-        st.markdown("<div style='height: 10px'></div>", unsafe_allow_html=True)
-        
-        # Hierarchy Filters
-        st.markdown('<div class="sidebar-label">🏢 ORGANIZATION</div>', unsafe_allow_html=True)
-        
-        all_hqs = sorted(raw_df['본부'].unique().tolist())
-        selected_hq = st.multiselect("본부", all_hqs, default=all_hqs, label_visibility="collapsed")
-        
-        valid_branches = sorted(raw_df[raw_df['본부'].isin(selected_hq)]['지사'].unique().tolist())
-        with st.expander(f"📍 지사 선택 ({len(valid_branches)})", expanded=False):
-            selected_branch = st.multiselect("지사", valid_branches, default=valid_branches, label_visibility="collapsed")
-            
-        # Manager Filter
-        valid_managers = sorted(raw_df[
-            (raw_df['본부'].isin(selected_hq)) & (raw_df['지사'].isin(selected_branch))
-        ]['구역담당영업사원'].unique().tolist())
-        
-        with st.expander(f"👤 담당자 선택 ({len(valid_managers)})", expanded=False):
-            if "미지정" in valid_managers: valid_managers.append(valid_managers.pop(valid_managers.index("미지정")))
-            selected_managers = st.multiselect("담당자", valid_managers, default=valid_managers, label_visibility="collapsed")
+        st.markdown("### 📊 Filter Panel")
+        all_hq = sorted(df["본부"].unique())
+        selected_hq = st.multiselect("본부", all_hq, default=all_hq)
 
-        st.markdown("---")
-        
-        # Metric Settings
-        st.markdown('<div class="sidebar-label">📊 METRICS & SCOPE</div>', unsafe_allow_html=True)
-        try:
-            metric_mode = st.pills("View Mode", ["건수 (Volume)", "금액 (Revenue)"], default="건수 (Volume)", selection_mode="single")
-        except:
-            metric_mode = st.radio("View Mode", ["건수 (Volume)", "금액 (Revenue)"])
+        all_br = sorted(df[df["본부"].isin(selected_hq)]["지사"].unique())
+        selected_br = st.multiselect("지사", all_br, default=all_br)
 
-        c1, c2 = st.columns(2)
-        with c1: kpi_target = st.toggle("KPI 차감", False)
-        with c2: arrears_only = st.toggle("체납 건", False)
+        all_mgr = sorted(df[df["지사"].isin(selected_br)]["구역담당영업사원"].unique())
+        selected_mgr = st.multiselect("담당자", all_mgr, default=all_mgr)
 
-        st.caption(f"Last Sync: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        metric_mode = st.radio("분석 기준", ["건수 (Volume)", "금액 (Revenue)"], horizontal=True)
 
-    # C. Filtering
-    if not selected_hq: selected_hq = all_hqs
-    if not selected_branch: selected_branch = valid_branches
-    if not selected_managers: selected_managers = valid_managers
+        kpi_only = st.checkbox("KPI 차감 대상만 보기")
+        arrears_only = st.checkbox("체납 고객만 보기")
 
-    mask = (raw_df['본부'].isin(selected_hq)) & \
-           (raw_df['지사'].isin(selected_branch)) & \
-           (raw_df['구역담당영업사원'].isin(selected_managers))
+    # Filtering
+    mask = (
+        df["본부"].isin(selected_hq)
+        & df["지사"].isin(selected_br)
+        & df["구역담당영업사원"].isin(selected_mgr)
+        & (not kpi_only or df["KPI_Status"].str.contains("대상", na=False))
+        & (not arrears_only or (df["체납"] != "미지정"))
+    )
+    d = df[mask]
 
-    if kpi_target: mask = mask & (raw_df['KPI_Status'].str.contains('대상', na=False))
-    if arrears_only: mask = mask & (raw_df['체납'] != '-') & (raw_df['체납'] != '미지정')
+    # Mode numerical field
+    val_col = "계약번호" if metric_mode == "건수 (Volume)" else "월정료(VAT미포함)"
+    agg = "count" if metric_mode == "건수 (Volume)" else "sum"
 
-    df = raw_df[mask]
-
-    # Global Constants for Charting
-    VAL_COL = '계약번호' if metric_mode == "건수 (Volume)" else '월정료(VAT미포함)'
-    AGG_FUNC = 'count' if metric_mode == "건수 (Volume)" else 'sum'
-    FMT_FUNC = (lambda x: f"{x:,.0f}건") if metric_mode == "건수 (Volume)" else DataProcessor.format_currency
-
-    # D. Main Dashboard Layout
+    # ============================================================
+    # Header
+    # ============================================================
     st.markdown("""
-        <div class="dashboard-header">
-            <div class="header-title">Enterprise Insight Hub</div>
-            <div class="header-meta">Strategic Operations & Risk Management Dashboard</div>
-        </div>
+    <div class="header">
+        <div class="header-title">KTT Enterprise Insight Hub</div>
+        <div class="header-sub">Strategic Operations & KPI Intelligence Dashboard</div>
+    </div>
     """, unsafe_allow_html=True)
 
-    # 1. KPI Cards Section
-    susp_df = df[df['정지,설변구분'] == '정지']
-    chg_df = df[df['정지,설변구분'] == '설변']
+    # ============================================================
+    # KPI Cards
+    # ============================================================
+    susp = d[d["정지,설변구분"] == "정지"]
+    chg  = d[d["정지,설변구분"] == "설변"]
 
-    v_susp = len(susp_df) if metric_mode == "건수 (Volume)" else susp_df['월정료(VAT미포함)'].sum()
-    v_chg = len(chg_df) if metric_mode == "건수 (Volume)" else chg_df['월정료(VAT미포함)'].sum()
-    
-    # Calculate previous period (Mockup logic for demo - assuming 10% growth)
-    delta_susp = -2.5 # Fake delta
-    delta_chg = 1.2
-    
-    def render_kpi_card(title, value, delta, icon, color_class):
-        delta_html = f"<div class='delta-{color_class}'>{delta}% vs last month</div>"
+    v_s = susp[val_col].agg(agg)
+    v_c = chg[val_col].agg(agg)
+    avg_days = d["당월말_정지일수"].mean() if "당월말_정지일수" in d else 0
+    risk = (len(susp) / len(d) * 100) if len(d) else 0
+
+    def kpi(title, value, delta):
+        cls = "delta-pos" if delta >= 0 else "delta-neg"
         return f"""
         <div class="kpi-card">
-            <div class="kpi-icon">{icon}</div>
             <div class="kpi-label">{title}</div>
             <div class="kpi-value">{value}</div>
-            <div class="kpi-delta">{delta_html}</div>
+            <div class="{cls}">{delta:+.1f}%</div>
         </div>
         """
 
-    # Using st.markdown with HTML for advanced cards
-    kpi_html = f"""
-    <div class="kpi-container">
-        {render_kpi_card(f"Total {'Suspension' if metric_mode == '건수 (Volume)' else 'Loss'}", FMT_FUNC(v_susp), delta_susp, "⛔", "pos")}
-        {render_kpi_card(f"Total {'Changes' if metric_mode == '건수 (Volume)' else 'Rev'}", FMT_FUNC(v_chg), delta_chg, "🔄", "neg")}
-        {render_kpi_card("Avg Duration", f"{df['당월말_정지일수'].mean():.1f} Days", -0.5, "📅", "pos")}
-        {render_kpi_card("Risk Ratio", f"{(len(susp_df)/len(df)*100 if len(df) else 0):.1f}%", 0.2, "⚠️", "neg")}
+    st.markdown(f"""
+    <div class="kpi-box">
+        {kpi("정지 총합", fmt(v_s, metric_mode), -2.3)}
+        {kpi("설변 총합", fmt(v_c, metric_mode), 1.4)}
+        {kpi("평균 정지일수", f"{avg_days:.1f} 일", 0.2)}
+        {kpi("정지 비율", f"{risk:.1f}%", -0.7)}
     </div>
-    """
-    st.markdown(kpi_html, unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-    # 2. Advanced Tabs
-    tab1, tab2, tab3 = st.tabs(["📊 Strategic View", "🔍 Operational Deep-Dive", "💾 Data Grid"])
+    # ============================================================
+    # TABS
+    # ============================================================
+    tab1, tab2, tab3 = st.tabs(["📈 Strategic View", "🔍 Operational Analysis", "📄 Data Grid"])
 
-    # [TAB 1] Strategy
+    # ------------------------------------------------------------
+    # TAB 1 : Strategic
+    # ------------------------------------------------------------
     with tab1:
-        col1, col2 = st.columns([2, 1])
-        
+        col1, col2 = st.columns([2,1])
+
+        # Trend Chart
         with col1:
             st.markdown('<div class="chart-box">', unsafe_allow_html=True)
-            # Area Chart with Gradient
-            if 'Period_YYYYMM' in df.columns:
-                trend_df = df.groupby(['Period_YYYYMM', '정지,설변구분'])[VAL_COL].agg(AGG_FUNC).reset_index()
-                trend_df = trend_df.sort_values('Period_YYYYMM')
-                
-                fig_trend = px.area(trend_df, x='Period_YYYYMM', y=VAL_COL, color='정지,설변구분',
-                                  color_discrete_map={'정지': '#EF4444', '설변': '#6366F1'})
-                fig_trend.update_layout(ChartFactory.get_layout("📈 Monthly Trend Analysis"))
-                fig_trend.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#F1F5F9')
-                st.plotly_chart(fig_trend, use_container_width=True)
-            else:
-                st.info("시계열 데이터를 분석하려면 '이벤트시작일' 컬럼이 필요합니다.")
+            if "Period" in d:
+                t = d.groupby(["Period","Sort"])[val_col].agg(agg).reset_index().sort_values("Sort")
+
+                fig = px.area(t, x="Period", y=val_col, color_discrete_sequence=["#6366F1"])
+                fig.update_traces(line_color="#4F46E5", fillcolor="rgba(79,70,229,0.18)")
+                fig.update_layout(title="📅 월별 트렌드 분석", template="plotly_white", height=380)
+                fig.update_xaxes(tickangle=-30)
+                st.plotly_chart(fig, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # Treemap
+        with col2:
+            st.markdown('<div class="chart-box">', unsafe_allow_html=True)
+            if not d.empty:
+                fig = px.treemap(
+                    d, path=[px.Constant("All"), "본부", "지사"],
+                    values=val_col,
+                    color="본부",
+                    color_discrete_sequence=px.colors.qualitative.Set3
+                )
+                fig.update_layout(title="조직 구조 매핑", height=380)
+                st.plotly_chart(fig, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # Pareto
+        st.markdown('<div class="chart-box">', unsafe_allow_html=True)
+        hq = d.groupby("본부")[[val_col]].agg(agg).reset_index()
+        hq = hq.sort_values(val_col, ascending=False)
+
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        fig.add_trace(go.Bar(x=hq["본부"], y=hq[val_col], marker_color="#3B82F6", name="Volume"))
+        fig.add_trace(go.Scatter(x=hq["본부"], y=hq[val_col].cumsum()/hq[val_col].sum()*100,
+                                 mode="lines+markers", line=dict(color="#EF4444", width=3), name="Pareto"),
+                      secondary_y=True)
+
+        fig.update_layout(title="본부별 효율성 분석 (Pareto)", template="plotly_white", height=400)
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # ------------------------------------------------------------
+    # TAB 2 : Operations
+    # ------------------------------------------------------------
+    with tab2:
+        col1, col2 = st.columns([1,2])
+
+        with col1:
+            st.markdown('<div class="chart-box">', unsafe_allow_html=True)
+            cat_col = st.selectbox("카테고리 선택", ["실적채널","L형/i형","출동/영상","부실구분"])
+            grp = d.groupby(cat_col)[val_col].agg(agg).reset_index()
+
+            fig = px.pie(grp, names=cat_col, values=val_col, hole=0.55,
+                         color_discrete_sequence=px.colors.qualitative.Safe)
+            fig.update_traces(textinfo="percent+label")
+            fig.update_layout(title=f"{cat_col} 비중 분석", height=380)
+            st.plotly_chart(fig, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
         with col2:
             st.markdown('<div class="chart-box">', unsafe_allow_html=True)
-            # Treemap (Better than Sunburst for dashboards)
-            if not df.empty:
-                fig_tree = px.treemap(df, path=[px.Constant("All"), '본부', '지사'], values=VAL_COL,
-                                    color='본부', color_discrete_sequence=px.colors.qualitative.Prism)
-                fig_tree.update_layout(ChartFactory.get_layout("🗺️ HQ/Branch Hierarchy", height=350))
-                fig_tree.update_traces(root_color="lightgrey")
-                st.plotly_chart(fig_tree, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-        st.markdown("<div style='height: 20px'></div>", unsafe_allow_html=True)
-        
-        # Pareto Analysis (Combo Chart)
-        st.markdown('<div class="chart-box">', unsafe_allow_html=True)
-        hq_stats = df.groupby('본부').agg({
-            '계약번호': 'count', 
-            '월정료(VAT미포함)': 'sum'
-        }).reset_index().sort_values('계약번호', ascending=False)
+            mgr = d.groupby("구역담당영업사원")[val_col].agg(agg)
+            mgr = mgr.sort_values(ascending=True).tail(15).reset_index()
 
-        fig_combo = make_subplots(specs=[[{"secondary_y": True}]])
-        fig_combo.add_trace(
-            go.Bar(x=hq_stats['본부'], y=hq_stats['계약번호'], name="Volume (건수)", 
-                   marker_color='#3B82F6', marker_line_width=0, opacity=0.8),
-            secondary_y=False
-        )
-        fig_combo.add_trace(
-            go.Scatter(x=hq_stats['본부'], y=hq_stats['월정료(VAT미포함)'], name="Revenue (금액)", 
-                       mode='lines+markers', line=dict(color='#F59E0B', width=3), marker=dict(size=8)),
-            secondary_y=True
-        )
-        fig_combo.update_layout(ChartFactory.get_layout("🏢 Efficiency Analysis (Pareto)", height=400))
-        st.plotly_chart(fig_combo, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # [TAB 2] Operations
-    with tab2:
-        c_op1, c_op2 = st.columns([1, 2])
-        
-        with c_op1:
-            st.markdown('<div class="chart-box">', unsafe_allow_html=True)
-            cat_col = st.selectbox("Category Breakdown", ["실적채널", "L형/i형", "출동/영상", "부실구분"], index=0)
-            
-            if cat_col in df.columns:
-                pie_df = df.groupby(cat_col)[VAL_COL].agg(AGG_FUNC).reset_index()
-                fig_donut = px.pie(pie_df, values=VAL_COL, names=cat_col, hole=0.6, 
-                                 color_discrete_sequence=ChartFactory.COLORS)
-                fig_donut.update_layout(ChartFactory.get_layout(f"{cat_col} Distribution", height=350))
-                fig_donut.update_traces(textinfo='percent+label', textposition='inside')
-                st.plotly_chart(fig_donut, use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-        with c_op2:
-            st.markdown('<div class="chart-box">', unsafe_allow_html=True)
-            # Horizontal Bar Chart for Managers (Top 15)
-            mgr_df = df.groupby('구역담당영업사원')[VAL_COL].agg(AGG_FUNC).reset_index().sort_values(VAL_COL, ascending=True).tail(15)
-            
-            fig_bar = go.Figure(go.Bar(
-                x=mgr_df[VAL_COL], 
-                y=mgr_df['구역담당영업사원'], 
-                orientation='h',
-                marker=dict(color=mgr_df[VAL_COL], colorscale='Viridis'),
-                text=mgr_df[VAL_COL].apply(lambda x: f"{x:,.0f}" if metric_mode=="건수 (Volume)" else f"{x/10000:,.0f}만"),
-                textposition='auto'
+            fig = go.Figure(go.Bar(
+                x=mgr[val_col], y=mgr["구역담당영업사원"],
+                orientation="h",
+                marker=dict(color=mgr[val_col], colorscale="Blues"),
+                text=mgr[val_col],
+                textposition="auto"
             ))
-            fig_bar.update_layout(ChartFactory.get_layout("🏆 Top Performing Managers (Top 15)", height=350))
-            st.plotly_chart(fig_bar, use_container_width=True)
+            fig.update_layout(title="Top 15 담당자 Performance", template="plotly_white", height=380)
+            st.plotly_chart(fig, use_container_width=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # [TAB 3] Data Grid
+    # ------------------------------------------------------------
+    # TAB 3 : Data Grid
+    # ------------------------------------------------------------
     with tab3:
-        st.markdown("### 💾 Intelligent Data Grid")
-        st.caption("Filter, Sort, and Edit data directly. Sensitive columns are protected.")
-        
-        target_cols = ['본부', '지사', '구역담당영업사원', '이벤트시작일', '고객번호', '상호', '월정료(VAT미포함)', '실적채널', '정지,설변구분', 'KPI_Status']
-        display_cols = [c for c in target_cols if c in df.columns]
-        
-        # Advanced Data Editor
-        edited_df = st.data_editor(
-            df[display_cols],
-            use_container_width=True,
-            height=600,
-            column_config={
-                "월정료(VAT미포함)": st.column_config.NumberColumn("월정료", format="₩%d"),
-                "이벤트시작일": st.column_config.DateColumn("Date", format="YYYY-MM-DD"),
-                "KPI_Status": st.column_config.TextColumn("KPI", help="KPI 차감 대상 여부")
-            },
-            hide_index=True,
-            num_rows="dynamic"
-        )
-        
-        # Download Logic
-        col_d1, col_d2 = st.columns([1, 4])
-        with col_d1:
-            pwd = st.text_input("Security Key", type="password", placeholder="Enter PIN", label_visibility="collapsed")
-        with col_d2:
-            if pwd == "3867":
-                st.download_button(
-                    "📥 Export Full Data (CSV)", 
-                    df.to_csv(index=False).encode('utf-8-sig'), 
-                    f"ktt_export_{datetime.now().strftime('%Y%m%d')}.csv", 
-                    "text/csv",
-                    type="primary"
-                )
-            else:
-                st.button("🔒 Locked", disabled=True)
+        st.markdown("### 📄 Data Table View")
+        cols = ["본부","지사","구역담당영업사원","이벤트시작일","상호","월정료(VAT미포함)","정지,설변구분","KPI_Status"]
+        cols = [c for c in cols if c in d]
 
+        d_show = d[cols]
+        st.dataframe(d_show, use_container_width=True, height=550)
+
+        # Download
+        if st.text_input("Download Key", type="password") == "3867":
+            st.download_button("📥 Download CSV", d.to_csv(index=False).encode("utf-8-sig"),
+                               "ktt_export.csv", "text/csv")
+
+
+# ================================================================
+# ENTRY POINT
+# ================================================================
 if __name__ == "__main__":
     main()
