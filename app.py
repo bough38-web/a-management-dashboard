@@ -20,22 +20,17 @@ st.markdown("""
     <style>
         @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
         
-        /* 1. Global Reset */
         html, body, [class*="css"] {
             font-family: 'Pretendard', sans-serif;
             color: #1e293b;
         }
-        .stApp {
-            background-color: #f8fafc;
-        }
+        .stApp { background-color: #f8fafc; }
         
-        /* 2. Sidebar Styling */
         [data-testid="stSidebar"] {
             background-color: #ffffff;
             border-right: 1px solid #e2e8f0;
         }
         
-        /* 3. Header Gradient */
         .main-title {
             font-size: 2.2rem;
             font-weight: 800;
@@ -45,28 +40,23 @@ st.markdown("""
             margin-bottom: 5px;
         }
         
-        /* 4. Metric Cards */
         div[data-testid="stMetric"] {
             background-color: white;
             padding: 20px;
             border-radius: 16px;
             border: 1px solid #e2e8f0;
             box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-            transition: all 0.2s;
         }
         div[data-testid="stMetric"]:hover {
             border-color: #6366f1;
             box-shadow: 0 8px 16px -4px rgba(99, 102, 241, 0.2);
-            transform: translateY(-2px);
         }
         
-        /* 5. Sidebar Headers & Buttons */
         .sidebar-header {
             font-size: 0.9rem;
             font-weight: 700;
             color: #475569;
-            margin-bottom: 8px;
-            margin-top: 15px;
+            margin: 15px 0 8px 0;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -79,7 +69,6 @@ st.markdown("""
             border-radius: 10px;
             font-weight: 600;
         }
-        /* Small Action Buttons in Sidebar */
         div.stButton > button {
             width: 100%;
             border-radius: 8px;
@@ -98,27 +87,40 @@ def format_korean_currency(value):
     elif abs(value) >= 1_000_000: return f"{value/1_000_000:,.1f}백만"
     else: return f"{value/1_000:,.0f}천"
 
+# [NEW] Custom Sort Logic Function
+def get_custom_rank(branch_name):
+    """
+    지사 이름에 특정 키워드가 포함되어 있으면 우선순위(Rank)를 부여합니다.
+    순서: 중앙 -> 강북 -> 서대문 -> 고양 -> 의정부 -> 남양주 -> 강릉 -> 원주
+    """
+    target_order = ['중앙', '강북', '서대문', '고양', '의정부', '남양주', '강릉', '원주']
+    branch_str = str(branch_name)
+    
+    for idx, keyword in enumerate(target_order):
+        if keyword in branch_str:
+            return idx
+    return 999  # 지정된 목록에 없으면 맨 뒤로
+
 @st.cache_data
 def load_enterprise_data():
     file_path = "data.csv"
     try:
         df = pd.read_csv(file_path)
     except FileNotFoundError:
-        # 데모용 더미 데이터 생성 (파일 없을 시)
+        # Dummy Data Generation
         data = {
-            '본부': ['서울본부', '경기본부', '부산본부'] * 30,
-            '지사': ['강남지사', '수원지사', '해운대지사'] * 30,
-            '구역담당영업사원': [f'담당자{i}' for i in range(90)],
-            '월정료(VAT미포함)': [10000, 20000, 30000] * 30,
-            '정지,설변구분': ['정지', '설변'] * 45,
-            'KPI_Status': ['대상', '비대상'] * 45,
-            '체납': ['-'] * 80 + ['Y'] * 10,
-            '당월말_정지일수': [5, 10, 15] * 30,
-            '계약번호': range(90)
+            '본부': ['강북/강원본부']*40 + ['서울본부']*20,
+            '지사': ['중앙지사', '원주지사', '강북지사', '고양지사', '의정부지사', '강릉지사', '서대문지사', '남양주지사']*5 + ['강남지사']*20,
+            '구역담당영업사원': [f'담당자{i}' for i in range(60)],
+            '월정료(VAT미포함)': [20000] * 60,
+            '정지,설변구분': ['정지', '설변'] * 30,
+            'KPI_Status': ['대상', '비대상'] * 30,
+            '체납': ['-'] * 60,
+            '당월말_정지일수': [10] * 60,
+            '계약번호': range(60)
         }
         return pd.DataFrame(data)
 
-    # 컬럼 매핑 및 전처리
     if '조회구분' in df.columns:
         df['정지,설변구분'] = df['조회구분']
     
@@ -149,12 +151,8 @@ if df.empty: st.stop()
 # -----------------------------------------------------------------------------
 # 3. Sidebar Control Center
 # -----------------------------------------------------------------------------
-# Helper Functions for Buttons
-def select_all(key, options):
-    st.session_state[key] = options
-
-def clear_all(key):
-    st.session_state[key] = []
+def select_all(key, options): st.session_state[key] = options
+def clear_all(key): st.session_state[key] = []
 
 with st.sidebar:
     st.markdown("### 🎛️ Control Panel")
@@ -164,90 +162,74 @@ with st.sidebar:
     all_hqs = sorted(df['본부'].unique().tolist())
     st.markdown(f'<div class="sidebar-header">🏢 본부 선택 <span class="count-badge">{len(all_hqs)}</span></div>', unsafe_allow_html=True)
     
-    # 본부 버튼 (전체선택 / 초기화)
     b1_col1, b1_col2 = st.columns(2)
     b1_col1.button("✅ 전체 선택", key="btn_all_hq", on_click=select_all, args=("hq_pills", all_hqs))
     b1_col2.button("🧹 초기화", key="btn_clr_hq", on_click=clear_all, args=("hq_pills",))
 
     if "hq_pills" not in st.session_state: st.session_state.hq_pills = all_hqs
-    
-    try:
-        selected_hq = st.pills("HQ", all_hqs, selection_mode="multi", key="hq_pills", label_visibility="collapsed")
-    except:
-        selected_hq = st.multiselect("HQ", all_hqs, key="hq_pills", label_visibility="collapsed")
-    
-    if not selected_hq: selected_hq = all_hqs # 선택 해제 시 전체 데이터 보여주기 방지용 (필요 시 []로 변경 가능)
+    try: selected_hq = st.pills("HQ", all_hqs, selection_mode="multi", key="hq_pills", label_visibility="collapsed")
+    except: selected_hq = st.multiselect("HQ", all_hqs, key="hq_pills", label_visibility="collapsed")
+    if not selected_hq: selected_hq = all_hqs
 
-    # [2] 지사 선택 (Cascading)
-    valid_branches = sorted(df[df['본부'].isin(selected_hq)]['지사'].unique().tolist())
+    # [2] 지사 선택
+    filtered_hq_df = df[df['본부'].isin(selected_hq)]
+    
+    # [NEW] 지사 목록 정렬 적용 (사이드바 목록에도 우선순위 적용)
+    # 기존 sorted() 대신 커스텀 랭크 후 정렬
+    unique_branches = filtered_hq_df['지사'].unique().tolist()
+    unique_branches.sort(key=lambda x: (get_custom_rank(x), x)) # 랭크 우선, 그 다음 이름순
+    valid_branches = unique_branches
+
     st.markdown(f'<div class="sidebar-header">📍 지사 선택 <span class="count-badge">{len(valid_branches)}</span></div>', unsafe_allow_html=True)
     
-    # 지사 버튼 (전체선택 / 초기화)
     b2_col1, b2_col2 = st.columns(2)
     b2_col1.button("✅ 전체 선택", key="btn_all_br", on_click=select_all, args=("br_pills", valid_branches))
     b2_col2.button("🧹 초기화", key="btn_clr_br", on_click=clear_all, args=("br_pills",))
 
-    # 지사 Session State 동기화 (상위 필터 변경 시 유효하지 않은 값 제거)
     if "br_pills" not in st.session_state: st.session_state.br_pills = valid_branches
-    else:
-        st.session_state.br_pills = [x for x in st.session_state.br_pills if x in valid_branches]
+    else: st.session_state.br_pills = [x for x in st.session_state.br_pills if x in valid_branches]
 
     with st.expander(f"지사 목록 ({len(valid_branches)}개)", expanded=True):
-        try:
-            selected_branch = st.pills("Branch", valid_branches, selection_mode="multi", key="br_pills", label_visibility="collapsed")
-        except:
-            selected_branch = st.multiselect("Branch", valid_branches, key="br_pills", label_visibility="collapsed")
-    
+        try: selected_branch = st.pills("Branch", valid_branches, selection_mode="multi", key="br_pills", label_visibility="collapsed")
+        except: selected_branch = st.multiselect("Branch", valid_branches, key="br_pills", label_visibility="collapsed")
     if not selected_branch: selected_branch = valid_branches
 
-    # [3] 담당자 선택 (Cascading)
+    # [3] 담당자 선택
     valid_managers = sorted(df[
         (df['본부'].isin(selected_hq)) & 
         (df['지사'].isin(selected_branch))
     ]['구역담당영업사원'].unique().tolist())
-    
-    # "미지정"을 맨 뒤로
     if "미지정" in valid_managers:
         valid_managers.remove("미지정")
         valid_managers.append("미지정")
 
     st.markdown(f'<div class="sidebar-header">👤 담당자 선택 <span class="count-badge">{len(valid_managers)}</span></div>', unsafe_allow_html=True)
     
-    # 담당자 버튼 (전체선택 / 초기화)
     b3_col1, b3_col2 = st.columns(2)
     b3_col1.button("✅ 전체 선택", key="btn_all_mgr", on_click=select_all, args=("mgr_pills", valid_managers))
     b3_col2.button("🧹 초기화", key="btn_clr_mgr", on_click=clear_all, args=("mgr_pills",))
 
-    # 담당자 Session State 동기화
     if "mgr_pills" not in st.session_state: st.session_state.mgr_pills = valid_managers
-    else:
-        st.session_state.mgr_pills = [x for x in st.session_state.mgr_pills if x in valid_managers]
+    else: st.session_state.mgr_pills = [x for x in st.session_state.mgr_pills if x in valid_managers]
 
     with st.expander(f"담당자 목록 ({len(valid_managers)}명)", expanded=False):
         if len(valid_managers) > 50:
              selected_managers = st.multiselect("Manager", valid_managers, key="mgr_pills", label_visibility="collapsed", placeholder="담당자 검색")
         else:
-            try:
-                selected_managers = st.pills("Manager", valid_managers, selection_mode="multi", key="mgr_pills", label_visibility="collapsed")
-            except:
-                selected_managers = st.multiselect("Manager", valid_managers, key="mgr_pills", label_visibility="collapsed")
-    
+            try: selected_managers = st.pills("Manager", valid_managers, selection_mode="multi", key="mgr_pills", label_visibility="collapsed")
+            except: selected_managers = st.multiselect("Manager", valid_managers, key="mgr_pills", label_visibility="collapsed")
     if not selected_managers: selected_managers = valid_managers
 
     st.markdown("---")
 
-    # [4] 분석 기준 및 옵션
+    # [4] 옵션
     st.markdown('<div class="sidebar-header">📊 분석 기준</div>', unsafe_allow_html=True)
-    try:
-        metric_mode = st.pills("Metric", ["건수 (Volume)", "금액 (Revenue)"], default="건수 (Volume)", selection_mode="single", label_visibility="collapsed")
-    except:
-        metric_mode = st.radio("Metric", ["건수 (Volume)", "금액 (Revenue)"], horizontal=True)
+    try: metric_mode = st.pills("Metric", ["건수 (Volume)", "금액 (Revenue)"], default="건수 (Volume)", selection_mode="single", label_visibility="collapsed")
+    except: metric_mode = st.radio("Metric", ["건수 (Volume)", "금액 (Revenue)"], horizontal=True)
             
     st.markdown('<div class="sidebar-header">⚙️ 고급 필터</div>', unsafe_allow_html=True)
     kpi_target = st.toggle("🎯 KPI 차감 대상만 보기", False)
     arrears_only = st.toggle("💰 체납 건만 보기", False)
-    
-    st.markdown("---")
     st.caption(f"Update: {pd.Timestamp.now().strftime('%Y-%m-%d')}")
 
 # [CORE LOGIC] Filter Application
@@ -258,7 +240,12 @@ mask = (df['본부'].isin(selected_hq)) & \
 if kpi_target: mask = mask & (df['KPI_Status'].str.contains('대상', na=False))
 if arrears_only: mask = mask & (df['체납'] != '-') & (df['체납'] != 'Unclassified') & (df['체납'] != '미지정')
 
-df_filtered = df[mask]
+df_filtered = df[mask].copy()
+
+# [NEW] Apply Custom Sort to the Dataframe Globally
+# 지사 컬럼을 기준으로 랭킹 컬럼 생성 -> 이 순서대로 데이터프레임 정렬
+df_filtered['Branch_Rank'] = df_filtered['지사'].apply(get_custom_rank)
+df_filtered = df_filtered.sort_values(by=['Branch_Rank', '지사'])
 
 # Global Config
 VAL_COL = '계약번호' if metric_mode == "건수 (Volume)" else '월정료(VAT미포함)'
@@ -271,10 +258,7 @@ FMT_FUNC = (lambda x: f"{x:,.0f}건") if metric_mode == "건수 (Volume)" else f
 st.markdown('<div class="main-title">KTT Enterprise Analytics</div>', unsafe_allow_html=True)
 st.caption("Strategic Insights & Operational Dashboard")
 
-# KPI Summary
-st.markdown("### 🚀 Executive Summary")
 k1, k2, k3, k4 = st.columns(4)
-
 susp_df = df_filtered[df_filtered['정지,설변구분'] == '정지']
 chg_df = df_filtered[df_filtered['정지,설변구분'] == '설변']
 
@@ -314,6 +298,8 @@ with tab_strategy:
     with r1_c2:
         st.markdown("##### 🌐 본부 포트폴리오")
         if not df_filtered.empty:
+            # Sunburst는 입력 데이터의 순서를 따르는 경향이 있으나, 계층구조상 본부-지사 순이므로
+            # 이미 df_filtered가 정렬되어 있어, 같은 본부 내 지사 순서가 커스텀 순서로 배치될 확률이 높음
             fig_sun = px.sunburst(df_filtered, path=['본부', '지사'], values=VAL_COL, color='본부', color_discrete_sequence=px.colors.qualitative.Prism)
             fig_sun.update_layout(height=380, margin=dict(l=10, r=10, t=20, b=20))
             st.plotly_chart(fig_sun, use_container_width=True)
@@ -329,10 +315,8 @@ with tab_strategy:
 # [TAB 2] Operations
 with tab_ops:
     st.markdown("#### 🚦 다차원 상세 분석")
-    try:
-        sub_mode = st.pills("상세 항목", ["실적채널", "L형/i형", "출동/영상", "정지,설변구분"], default="정지,설변구분", selection_mode="single")
-    except:
-        sub_mode = st.radio("상세 항목", ["실적채널", "L형/i형", "출동/영상", "정지,설변구분"], horizontal=True)
+    try: sub_mode = st.pills("상세 항목", ["실적채널", "L형/i형", "출동/영상", "정지,설변구분"], default="정지,설변구분", selection_mode="single")
+    except: sub_mode = st.radio("상세 항목", ["실적채널", "L형/i형", "출동/영상", "정지,설변구분"], horizontal=True)
     if not sub_mode: sub_mode = "정지,설변구분"
 
     c_dyn1, c_dyn2 = st.columns([1, 2])
@@ -364,11 +348,29 @@ with tab_ops:
         fig_hq.update_traces(texttemplate='%{text:,.0f}' if metric_mode=="건수 (Volume)" else '%{text:.2s}', textposition='outside')
         st.plotly_chart(fig_hq, use_container_width=True)
 
-    with st.expander("📍 지사별 현황 (Click to Expand)", expanded=False):
+    # [NEW] 지사별 현황 (정렬 적용됨)
+    with st.expander("📍 지사별 현황 (Click to Expand)", expanded=True):
+        # 1. 집계 (이때 'Branch_Rank' 정보가 사라지므로 다시 매핑하거나, 순서를 보존해야 함)
         br_brk = df_filtered.groupby(['지사', '정지,설변구분'])[VAL_COL].agg(AGG_FUNC).reset_index()
         br_brk.columns = ['지사', '구분', '값']
+        
+        # 2. 순서 재적용
+        br_brk['Rank'] = br_brk['지사'].apply(get_custom_rank)
+        
+        # 3. 정렬 (Rank 오름차순 -> 값 내림차순 등)
+        # 만약 순서 고정이 최우선이라면 Rank로만 정렬
+        br_brk = br_brk.sort_values(by=['Rank', '값'], ascending=[True, False])
+        
+        # 4. 차트 그리기
         fig_br = px.bar(br_brk, x='지사', y='값', color='구분', barmode='stack')
-        fig_br.update_layout(template="plotly_white", margin=dict(t=20, b=20))
+        
+        # 5. X축 순서 강제 지정 (Plotly가 데이터 순서대로 그리지 않고 자동정렬 할 수 있으므로)
+        sorted_categories = br_brk['지사'].unique().tolist() # 위에서 정렬된 순서
+        fig_br.update_layout(
+            template="plotly_white", 
+            margin=dict(t=20, b=20),
+            xaxis={'categoryorder':'array', 'categoryarray': sorted_categories} # 핵심: 순서 강제
+        )
         st.plotly_chart(fig_br, use_container_width=True)
 
     with st.expander("👤 담당자별 Top 20 (Click to Expand)", expanded=False):
@@ -414,8 +416,6 @@ with tab_ops:
 # [TAB 3] Data Grid
 with tab_data:
     st.subheader("💾 Intelligent Data Grid")
-    
-    # Secure Download
     c_pw, c_btn = st.columns([1, 3])
     pwd = c_pw.text_input("다운로드 비밀번호", type="password", placeholder="****")
     if pwd == "3867":
@@ -423,9 +423,6 @@ with tab_data:
         c_btn.download_button("📥 전체 데이터 다운로드 (CSV)", df_filtered.to_csv(index=False).encode('utf-8-sig'), 'ktt_data.csv', 'text/csv')
     
     st.markdown("---")
-    
-    # [Performance Optimized Table]
-    # 기존 style.apply는 데이터가 많을 경우 매우 느리므로, column_config로 대체하여 성능을 최적화했습니다.
     d_cols = ['본부', '지사', '구역담당영업사원', 'Period', '고객번호', '상호', '월정료(VAT미포함)', '실적채널', '정지,설변구분', '부실구분', 'KPI_Status']
     v_cols = [c for c in d_cols if c in df_filtered.columns]
     
@@ -435,11 +432,7 @@ with tab_data:
         height=600,
         column_config={
             "월정료(VAT미포함)": st.column_config.NumberColumn("월정료", format="₩%d"),
-            "KPI_Status": st.column_config.TextColumn(
-                "KPI 상태",
-                help="대상이면 주의 필요",
-                validate="^대상$"  # '대상'일 경우 셀 하이라이트 효과 (브라우저/테마에 따라 다름)
-            )
+            "KPI_Status": st.column_config.TextColumn("KPI 상태", help="대상이면 주의 필요", validate="^대상$")
         }
     )
-    st.caption("💡 팁: 컬럼 헤더를 클릭하여 정렬할 수 있으며, 오른쪽 위 확대 버튼으로 크게 볼 수 있습니다.")
+    st.caption("💡 팁: 지사 랭킹 순서(중앙, 강북...)가 기본 적용되어 있습니다.")
