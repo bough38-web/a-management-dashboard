@@ -271,6 +271,7 @@ FMT_FUNC = (lambda x: f"{x:,.0f}건") if metric_mode == "건수 (Volume)" else f
 # -----------------------------------------------------------------------------
 # 4. View Switcher & KPI Cards
 # -----------------------------------------------------------------------------
+st.markdown('<div class="main-title"></div>', unsafe_allow_html=True)
 st.markdown('<div class="main-title">KTT 정지/부실 현황</div>', unsafe_allow_html=True)
 st.markdown('<div class="main-subtitle">Strategic Insights & Operational Dashboard</div>', unsafe_allow_html=True)
 
